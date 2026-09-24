@@ -1,0 +1,20 @@
+{
+  "name": "stock-rag",
+  "version": "1.0.0",
+  "description": "A local-first stock-market research terminal combining market data, technical/fundamental analysis, document RAG, and local LLM chat.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "build:css": "tailwindcss -i ./static/input.css -o ./static/tailwind.css --minify"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  }
+}

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>StockAI - Premium Terminal</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind & Plugins -->
+    <link rel="stylesheet" href="/static/tailwind.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Text', 'Inter', 'sans-serif'],
+                        display: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        apple: {
+                            blue: '#007AFF',
+                            green: '#34C759',
+                            red: '#FF3B30',
+                            orange: '#FF9500',
+                            gray: '#8E8E93',
+                            gray2: '#AEAEB2',
+                            bg: '#F2F2F7',
+                            surface: 'rgba(255, 255, 255, 0.75)',
+                            text: '#1C1C1E'
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'slide-up': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '10%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '10%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    
+    <link rel="stylesheet" href="/static/index.css">
+</head>
+<body class="h-screen w-full flex overflow-hidden selection:bg-apple-blue selection:text-white">
+
+    <!-- Left Sidebar -->
+    <aside class="w-20 md:w-64 glass-sidebar flex flex-col z-30 shrink-0 transition-all duration-300 relative">
+        <div class="h-20 flex items-center justify-center md:justify-start md:px-6 border-b border-black/5 dark:border-white/5">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-apple-blue to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                <i data-lucide="activity" class="w-5 h-5 text-white"></i>
+            </div>
+            <span class="text-xl font-bold tracking-tight ml-3 hidden md:block text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300">StockAI</span>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto py-6 px-3 md:px-4 space-y-2">
+            <div class="text-[10px] font-bold uppercase tracking-widest text-apple-gray mb-3 px-2 hidden md:block">Navigation</div>
+            
+            <button onclick="showView('dashboard')" class="nav-item active w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium">
+                <i data-lucide="layout-grid" class="w-5 h-5 md:mr-3 opacity-70"></i>
+                <span class="hidden md:block">Markets</span>
+            </button>
+            
+            <button onclick="focusSearch()" class="nav-item w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium">
+                <i data-lucide="search" class="w-5 h-5 md:mr-3 opacity-70"></i>
+                <span class="hidden md:block">Search</span>
+            </button>
+
+            <div class="text-[10px] font-bold uppercase tracking-widest text-apple-gray mb-3 mt-8 px-2 hidden md:block">Intelligence</div>
+            
+            <button onclick="focusChat()" class="nav-item w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium relative">
+                <i data-lucide="sparkles" class="w-5 h-5 md:mr-3 opacity-70"></i>
+                <span class="hidden md:block">AI Assistant</span>
+                <span class="absolute right-3 w-2 h-2 rounded-full bg-apple-blue animate-pulse hidden md:block"></span>
+            </button>
+
+            <button onclick="toggleModal('docs-modal')" class="nav-item w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium">
+                <i data-lucide="database" class="w-5 h-5 md:mr-3 opacity-70"></i>
+                <span class="hidden md:block">Data Hub</span>
+            </button>
+
+            <div class="text-[10px] font-bold uppercase tracking-widest text-apple-gray mb-3 mt-8 px-2 hidden md:block">System</div>
+            
+            <button onclick="toggleModal('settings-modal')" class="nav-item w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium">
+                <i data-lucide="settings" class="w-5 h-5 md:mr-3 opacity-70"></i>
+                <span class="hidden md:block">Settings</span>
+            </button>
+        </div>
+
+        <div class="p-4 border-t border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5 hidden md:block">
+            <div class="flex items-center justify-between text-xs font-medium mb-3 text-apple-gray">
+                <span class="flex items-center gap-2"><i data-lucide="globe" class="w-3.5 h-3.5"></i> Market Data</span>
+                <div class="w-2.5 h-2.5 rounded-full" id="status-api" style="background: #8e8e93"></div>
+            </div>
+            <div class="flex items-center justify-between text-xs font-medium text-apple-gray">
+                <span class="flex items-center gap-2"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> Local LLM</span>
+                <div class="w-2.5 h-2.5 rounded-full" id="status-ollama" style="background: #8e8e93"></div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col min-w-0 relative h-full">
+        
+        <!-- Header -->
+        <header class="h-20 glass-panel border-b-0 border-x-0 rounded-none flex items-center px-6 shrink-0 z-20 justify-between">
+            <div class="relative w-full max-w-xl group">
+                <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                    <i data-lucide="search" class="w-5 h-5 text-apple-gray group-focus-within:text-apple-blue transition-colors"></i>
+                </div>
+                <input type="text" id="symbol-input" 
+                       class="w-full bg-black/5 dark:bg-white/5 border border-transparent rounded-2xl pl-12 pr-4 py-3 text-base focus:outline-none input-glow transition-all backdrop-blur-md"
+                       placeholder="Search symbols, indices, or ask a question..." 
+                       onkeydown="if(event.key === 'Enter') handleSearch()">
+            </div>
+            <div class="flex items-center gap-4 ml-4">
+                <button class="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center hover:bg-black/10 transition-colors">
+                    <i data-lucide="bell" class="w-5 h-5 opacity-70"></i>
+                </button>
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-apple-blue p-0.5 shadow-sm">
+                    <div class="w-full h-full bg-white dark:bg-black rounded-full flex items-center justify-center">
+                        <i data-lucide="user" class="w-5 h-5 opacity-70"></i>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dynamic Layout Area -->
+        <div class="flex-1 flex overflow-hidden relative">
+            
+            <!-- Left Data View -->
+            <div class="flex-1 overflow-y-auto px-6 py-8 md:px-10 scroll-smooth pb-32" id="dashboard-view">
+                
+                <!-- Empty State -->
+                <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center opacity-80 animate-fade-in max-w-lg mx-auto">
+                    <div class="w-24 h-24 mb-6 rounded-3xl bg-gradient-to-br from-apple-blue/20 to-purple-500/20 flex items-center justify-center shadow-2xl">
+                        <i data-lucide="bar-chart-2" class="w-12 h-12 text-apple-blue"></i>
+                    </div>
+                    <h2 class="text-3xl font-bold mb-3 tracking-tight">Market Intelligence</h2>
+                    <p class="text-base text-apple-gray leading-relaxed mb-8">Search for a stock symbol to view live premium market data, technical analysis, and fundamentals. Chat with AI to analyze complex datasets seamlessly.</p>
+                    
+                    <div class="grid grid-cols-2 gap-4 w-full">
+                        <button onclick="simulateSearch('AAPL')" class="glass-panel p-4 rounded-2xl text-left hover:border-apple-blue transition-colors group">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-bold">AAPL</span>
+                                <i data-lucide="arrow-up-right" class="w-4 h-4 text-apple-gray group-hover:text-apple-blue"></i>
+                            </div>
+                            <span class="text-xs text-apple-gray">Apple Inc.</span>
+                        </button>
+                        <button onclick="simulateSearch('NVDA')" class="glass-panel p-4 rounded-2xl text-left hover:border-apple-blue transition-colors group">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="font-bold">NVDA</span>
+                                <i data-lucide="arrow-up-right" class="w-4 h-4 text-apple-gray group-hover:text-apple-blue"></i>
+                            </div>
+                            <span class="text-xs text-apple-gray">NVIDIA Corp.</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stock View -->
+                <div id="stock-view" class="hidden max-w-5xl mx-auto space-y-8 pb-10">
+                    
+                    <!-- Header Info -->
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 animate-slide-up">
+                        <div>
+                            <div class="flex items-center gap-3 mb-2">
+                                <h1 class="text-5xl md:text-6xl font-bold tracking-tight" id="stock-symbol">--</h1>
+                                <span class="px-3 py-1 rounded-full text-xs font-bold tracking-widest bg-black/5 dark:bg-white/10 text-apple-gray uppercase" id="stock-exchange">--</span>
+                                <span class="px-3 py-1 rounded-full text-xs font-bold tracking-widest hidden flex items-center gap-1.5" id="stock-status">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span> LIVE
+                                </span>
+                            </div>
+                            <h2 class="text-2xl font-medium text-apple-gray" id="stock-name">Loading...</h2>
+                        </div>
+                        <div class="text-left md:text-right">
+                            <div class="text-5xl md:text-6xl font-bold tracking-tight" id="stock-price">$0.00</div>
+                            <div class="text-xl font-semibold mt-2 flex items-center md:justify-end gap-1.5 transition-colors" id="stock-change-container">
+                                <i data-lucide="trending-up" class="w-6 h-6" id="stock-trend-icon"></i>
+                                <span id="stock-change">0.00 (0.00%)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Chart Section -->
+                    <div class="glass-panel rounded-3xl p-6 shadow-sm animate-slide-up" style="animation-delay: 0.1s;">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-semibold">Price Performance</h3>
+                            <div class="flex gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-xl" id="chart-periods">
+                                <button class="chart-period-btn active" onclick="loadChartData('1mo')">1M</button>
+                                <button class="chart-period-btn" onclick="loadChartData('3mo')">3M</button>
+                                <button class="chart-period-btn" onclick="loadChartData('6mo')">6M</button>
+                                <button class="chart-period-btn" onclick="loadChartData('1y')">1Y</button>
+                            </div>
+                        </div>
+                        <div class="w-full h-[350px] relative">
+                            <div id="mainChart" style="width:100%;height:100%;"></div>
+                            <div id="chart-loading" class="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-xl hidden">
+                                <div class="flex gap-1">
+                                    <div class="w-2 h-2 rounded-full bg-apple-blue loading-dot"></div>
+                                    <div class="w-2 h-2 rounded-full bg-apple-blue loading-dot"></div>
+                                    <div class="w-2 h-2 rounded-full bg-apple-blue loading-dot"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="flex gap-8 border-b border-black/10 dark:border-white/10 mt-8 mb-6 animate-slide-up" style="animation-delay: 0.2s;">
+                        <button class="tab-btn active pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('overview')">Overview</button>
+                        <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('technical')">Technical</button>
+                        <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('fundamentals')">Fundamentals</button>
+                        <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide flex items-center gap-2" onclick="switchTab('news')">News <span class="bg-apple-blue text-white text-[10px] px-1.5 rounded-full" id="news-badge">0</span></button>
+                    </div>
+
+                    <!-- Tab Contents -->
+                    <div class="relative min-h-[300px] animate-slide-up" style="animation-delay: 0.3s;">
+                        
+                        <!-- Overview -->
+                        <div id="tab-overview" class="tab-content block animate-fade-in">
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="basic-metrics">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Technical -->
+                        <div id="tab-technical" class="tab-content hidden animate-fade-in">
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="technical-metrics">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Fundamentals -->
+                        <div id="tab-fundamentals" class="tab-content hidden animate-fade-in">
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="fundamental-metrics">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- News -->
+                        <div id="tab-news" class="tab-content hidden animate-fade-in">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="news-container">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Right Chat Panel -->
+            <div id="chat-panel" class="w-full md:w-[450px] glass-sidebar flex flex-col shrink-0 z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.05)] transform transition-transform duration-300 md:translate-x-0 absolute md:relative right-0 h-full border-l border-black/10 dark:border-white/10 hidden md:flex">
+                
+                <div class="h-16 border-b border-black/10 dark:border-white/10 flex items-center justify-between px-6 shrink-0 bg-white/50 dark:bg-black/50 backdrop-blur-md">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center text-white bg-gradient-to-tr from-blue-600 to-blue-400 shadow-md">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <span class="text-sm font-bold tracking-tight block">Intelligence Engine</span>
+                            <span class="text-[10px] text-apple-gray flex items-center gap-1" id="chat-engine-status"><div class="w-1.5 h-1.5 rounded-full bg-gray-400"></div> Checking local services…</span>
+                        </div>
+                    </div>
+                    <button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/5" title="Start a new conversation" aria-label="Start a new conversation" onclick="resetChatSession()"><i data-lucide="square-pen" class="w-4 h-4"></i></button>
+                    <button class="md:hidden w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/10" onclick="toggleChatMobile()">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <!-- Chat Messages -->
+                <div class="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth" id="chat-messages">
+                    <div class="flex flex-col gap-1 items-start max-w-[95%] animate-fade-in">
+                        <div class="chat-bubble-ai p-4 text-sm leading-relaxed prose dark:prose-invert max-w-none shadow-sm">
+                            <p class="m-0 font-medium">Hello! I'm your local AI analyst.</p>
+                            <p class="text-apple-gray mt-2 text-xs">I can analyze real-time market data, read uploaded PDFs, or fetch information from the web. What would you like to explore today?</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Input Area -->
+                <div class="p-4 pt-2 shrink-0 bg-white/50 dark:bg-black/50 backdrop-blur-xl border-t border-black/5 dark:border-white/5">
+                    <div class="relative flex items-end">
+                        <textarea id="chat-input" 
+                                  class="w-full bg-white dark:bg-[#2C2C2E] border border-black/10 dark:border-white/10 rounded-[24px] pl-5 pr-14 py-3.5 text-sm focus:outline-none input-glow resize-none shadow-sm transition-all" 
+                                  style="min-height: 52px; max-height: 150px; line-height: 1.4;"
+                                  placeholder="Ask about AAPL, upload docs, or analyze..." 
+                                  rows="1"
+                                  onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChatMessage(); }"></textarea>
+                        
+                        <button onclick="sendChatMessage()" class="absolute right-2 bottom-2 p-2 rounded-full bg-apple-blue text-white hover:bg-blue-600 transition-colors shadow-md transform hover:scale-105 active:scale-95">
+                            <i data-lucide="arrow-up" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="text-[10px] text-center mt-3 text-apple-gray flex justify-center items-center gap-1">
+                        <i data-lucide="shield-check" class="w-3 h-3"></i> 100% Local Privacy. AI can make mistakes.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mobile Chat Toggle FAB -->
+            <button onclick="toggleChatMobile()" class="md:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-apple-blue text-white shadow-xl flex items-center justify-center z-40 hover:scale-105 transition-transform">
+                <i data-lucide="message-square" class="w-6 h-6"></i>
+            </button>
+        </div>
+    </main>
+
+    <!-- Global Loading Overlay -->
+    <div id="global-loading" class="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-panel p-6 rounded-2xl flex flex-col items-center shadow-2xl">
+            <div class="w-8 h-8 border-4 border-apple-blue border-t-transparent rounded-full animate-spin mb-3"></div>
+            <span class="text-sm font-semibold">Processing...</span>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-panel rounded-3xl w-full max-w-md mx-4 overflow-hidden transform scale-95 transition-all duration-300 shadow-2xl border border-white/20" id="settings-content">
+            <div class="px-6 py-5 border-b border-black/10 dark:border-white/10 flex justify-between items-center bg-white/40 dark:bg-black/40">
+                <h3 class="text-lg font-bold tracking-tight">System Settings</h3>
+                <button onclick="toggleModal('settings-modal')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/10 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-5 max-h-[75vh] overflow-y-auto" id="settings-fields">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-widest text-apple-gray mb-2">AI Model</label>
+                    <input type="text" id="set-model" class="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-widest text-apple-gray mb-2">Temperature</label>
+                        <input type="number" step="0.1" id="set-temp" class="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-widest text-apple-gray mb-2">Context Window</label>
+                        <input type="number" id="set-ctx" class="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow">
+                    </div>
+                </div>
+                <div class="flex items-center justify-between pt-2">
+                    <label class="text-sm font-semibold">Show Citations in Chat</label>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="set-cite" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-apple-blue"></div>
+                    </label>
+                </div>
+                <div id="advanced-settings-controls" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+            </div>
+            <div class="px-6 py-4 border-t border-black/10 dark:border-white/10 flex justify-end bg-white/40 dark:bg-black/40">
+                <button onclick="saveSettings()" class="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-apple-blue hover:bg-blue-600 shadow-md transition-all active:scale-95">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Docs Modal (RAG Hub) -->
+    <div id="docs-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-panel rounded-3xl w-full max-w-lg mx-4 overflow-hidden transform scale-95 transition-all duration-300 shadow-2xl border border-white/20" id="docs-content">
+            <div class="px-6 py-5 border-b border-black/10 dark:border-white/10 flex justify-between items-center bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                <h3 class="text-lg font-bold tracking-tight flex items-center gap-2"><i data-lucide="database" class="w-5 h-5 text-apple-blue"></i> Data Hub</h3>
+                <button onclick="toggleModal('docs-modal')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/10 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-6">
+                <div>
+                    <label class="block text-sm font-bold mb-3">Upload Documents (PDF, CSV)</label>
+                    <label class="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-black/20 dark:border-white/20 rounded-2xl cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all group">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6 text-apple-gray group-hover:text-apple-blue transition-colors">
+                            <i data-lucide="cloud-upload" class="w-10 h-10 mb-3"></i>
+                            <p class="text-sm font-medium"><span class="font-bold text-text-main">Click to upload</span> or drag and drop</p>
+                            <p class="text-xs mt-1">PDFs, CSVs will be vectorized for RAG</p>
+                        </div>
+                        <input id="file-upload" type="file" class="hidden" accept=".pdf,.csv,.xlsx" onchange="uploadFile()" />
+                    </label>
+                </div>
+                <div class="relative">
+                    <div class="absolute inset-0 flex items-center" aria-hidden="true">
+                        <div class="w-full border-t border-black/10 dark:border-white/10"></div>
+                    </div>
+                    <div class="relative flex justify-center">
+                        <span class="bg-[var(--glass-bg)] px-3 text-xs font-bold uppercase text-apple-gray tracking-widest">OR</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-3">Web Research Crawling</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="crawl-url" class="flex-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow" placeholder="https://example.com/article">
+                        <button onclick="crawlUrl()" class="px-5 py-3 rounded-xl text-sm font-bold text-white bg-black dark:bg-white dark:text-black hover:opacity-80 shadow-md transition-all active:scale-95">Crawl</button>
+                    </div>
+                </div>
+                <div id="upload-status" class="text-sm font-bold hidden p-3 rounded-xl bg-black/5 dark:bg-white/5 flex items-center justify-center"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/app.js"></script>
+</body>
+</html>
