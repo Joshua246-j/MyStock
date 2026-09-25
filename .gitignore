@@ -5,4 +5,7 @@ __pycache__/
 data/chroma/
 uploads/
 .pytest_cache/
+.pytest-tmp/
+*.ollama-*-pull.log
 node_modules/
+*.html

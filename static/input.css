@@ -1,8 +1,10 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(html[data-theme="dark"], html[data-theme="dark"] *));
+
 @theme {
-  --color-accent: #2962ff;
-  --color-accent-hover: #1e4bd8;
+  --color-accent: #0a84ff;
+  --color-accent-hover: #006edb;
   --color-surface: #ffffff;
   --color-background: #f5f5f7;
   --color-primary: #1d1d1f;
@@ -10,6 +12,12 @@
   --color-border: #d2d2d7;
   --color-success: #34c759;
   --color-danger: #ff3b30;
+  --color-apple-blue: #0a84ff;
+  --color-apple-green: #30d158;
+  --color-apple-red: #ff453a;
+  --color-apple-orange: #ff9f0a;
+  --color-apple-gray: #737780;
+  --color-text-main: #1c1c1e;
 }
 
 /* Apple-style basic typography */

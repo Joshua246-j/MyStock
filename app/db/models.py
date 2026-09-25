@@ -25,6 +25,7 @@ class DocumentMetadata(Base):
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String, index=True)
     document_type = Column(String)
+    storage_path = Column(String, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.datetime.utcnow)
     status = Column(String) # 'processing', 'completed', 'failed'
 

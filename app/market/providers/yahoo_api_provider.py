@@ -1,0 +1,191 @@
+import urllib.request
+import json
+import logging
+from typing import Dict, Any, List
+from datetime import datetime
+from app.market.providers.base import MarketDataProvider
+import time
+
+logger = logging.getLogger("stockrag.market.yahooapi")
+
+class YahooApiProvider(MarketDataProvider):
+    """
+    Directly hits Yahoo Finance JSON API endpoints as a lightweight fallback 
+    when the yfinance library fails or gets rate-limited.
+    """
+    def __init__(self):
+        self.base_url_v8 = "https://query1.finance.yahoo.com/v8/finance"
+        self.base_url_v10 = "https://query1.finance.yahoo.com/v10/finance"
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json'
+        }
+
+    def _fetch(self, url: str) -> Dict[str, Any]:
+        req = urllib.request.Request(url, headers=self.headers)
+        try:
+            response = urllib.request.urlopen(req, timeout=10)
+            data = json.loads(response.read().decode('utf-8'))
+            return data
+        except Exception as e:
+            logger.warning("yahooapi_request_failed", extra={"url": url, "reason": str(e)})
+            raise
+
+    def get_quote(self, symbol: str) -> Dict[str, Any]:
+        try:
+            url = f"{self.base_url_v8}/chart/{symbol}?interval=1d&range=1d"
+            data = self._fetch(url)
+            meta = data['chart']['result'][0]['meta']
+            
+            price = meta.get('regularMarketPrice')
+            prev_close = meta.get('previousClose')
+            change = price - prev_close if price and prev_close else 0
+            change_percent = (change / prev_close * 100) if prev_close else 0
+
+            return {
+                "success": True,
+                "symbol": symbol,
+                "price": price,
+                "change": change,
+                "change_percent": change_percent,
+                "previous_close": prev_close,
+                "volume": meta.get('regularMarketVolume', 0),
+                "currency": meta.get('currency', 'USD'),
+                "timestamp": datetime.now().astimezone().isoformat(),
+                "data_status": "DELAYED_OR_UNVERIFIED",
+                "source": "yahooapi"
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e), "source": "yahooapi"}
+
+    def get_history(self, symbol: str, period: str = "1mo", interval: str = "1d") -> Dict[str, Any]:
+        # Map period format
+        if period == "1y": period = "1y"
+        # etc.
+        try:
+            url = f"{self.base_url_v8}/chart/{symbol}?interval={interval}&range={period}"
+            data = self._fetch(url)
+            result = data['chart']['result'][0]
+            timestamps = result.get('timestamp', [])
+            indicators = result['indicators']['quote'][0]
+            
+            opens = indicators.get('open', [])
+            highs = indicators.get('high', [])
+            lows = indicators.get('low', [])
+            closes = indicators.get('close', [])
+            volumes = indicators.get('volume', [])
+            
+            history = []
+            for i in range(len(timestamps)):
+                if closes[i] is None:
+                    continue
+                dt = datetime.fromtimestamp(timestamps[i]).strftime('%Y-%m-%d')
+                history.append({
+                    "Date": dt,
+                    "Open": opens[i],
+                    "High": highs[i],
+                    "Low": lows[i],
+                    "Close": closes[i],
+                    "Volume": volumes[i]
+                })
+            
+            return {
+                "success": True,
+                "symbol": symbol,
+                "period": period,
+                "interval": interval,
+                "data": history,
+                "source": "yahooapi",
+                "timestamp": datetime.now().astimezone().isoformat(),
+                "data_status": "HISTORICAL"
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e), "source": "yahooapi"}
+
+    def get_company_profile(self, symbol: str) -> Dict[str, Any]:
+        try:
+            url = f"{self.base_url_v10}/quoteSummary/{symbol}?modules=assetProfile,price"
+            data = self._fetch(url)
+            result = data['quoteSummary']['result'][0]
+            profile = result.get('assetProfile', {})
+            price_info = result.get('price', {})
+            
+            return {
+                "success": True,
+                "symbol": symbol,
+                "name": price_info.get('shortName', symbol),
+                "sector": profile.get('sector', 'Unknown'),
+                "industry": profile.get('industry', 'Unknown'),
+                "description": profile.get('longBusinessSummary', 'No description available.'),
+                "website": profile.get('website', ''),
+                "country": profile.get('country', ''),
+                "source": "yahooapi"
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e), "source": "yahooapi"}
+
+    def get_financials(self, symbol: str) -> Dict[str, Any]:
+        try:
+            url = f"{self.base_url_v10}/quoteSummary/{symbol}?modules=financialData,defaultKeyStatistics"
+            data = self._fetch(url)
+            result = data['quoteSummary']['result'][0]
+            fin = result.get('financialData', {})
+            stats = result.get('defaultKeyStatistics', {})
+            
+            metrics = {
+                "trailingPE": fin.get('currentPrice', {}).get('raw') / stats.get('trailingEps', {}).get('raw') if fin.get('currentPrice', {}).get('raw') and stats.get('trailingEps', {}).get('raw') else None,
+                "forwardPE": stats.get('forwardPE', {}).get('raw'),
+                "priceToBook": stats.get('priceToBook', {}).get('raw'),
+                "returnOnEquity": fin.get('returnOnEquity', {}).get('raw'),
+                "debtToEquity": fin.get('debtToEquity', {}).get('raw'),
+                "revenueGrowth": fin.get('revenueGrowth', {}).get('raw'),
+                "ebitda": fin.get('ebitda', {}).get('raw'),
+                "freeCashflow": fin.get('freeCashflow', {}).get('raw'),
+                "grossMargins": fin.get('grossMargins', {}).get('raw'),
+                "operatingMargins": fin.get('operatingMargins', {}).get('raw'),
+                "profitMargins": fin.get('profitMargins', {}).get('raw')
+            }
+            metrics = {k: v for k, v in metrics.items() if v is not None}
+            
+            return {
+                "success": True,
+                "symbol": symbol,
+                "metrics": metrics,
+                "source": "yahooapi",
+                "retrieved_at": datetime.now().isoformat()
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e), "source": "yahooapi"}
+
+    def get_balance_sheet(self, symbol: str) -> Dict[str, Any]:
+        return {"success": False, "error": "Not supported", "source": "yahooapi"}
+
+    def get_cash_flow(self, symbol: str) -> Dict[str, Any]:
+        return {"success": False, "error": "Not supported", "source": "yahooapi"}
+
+    def get_news(self, symbol: str) -> List[Dict[str, Any]]:
+        # Yahoo direct search API for news
+        try:
+            url = f"https://query2.finance.yahoo.com/v1/finance/search?q={symbol}&newsCount=10"
+            data = self._fetch(url)
+            news_items = data.get('news', [])
+            
+            formatted_news = []
+            for item in news_items:
+                formatted_news.append({
+                    "title": item.get('title', ''),
+                    "url": item.get('link', ''),
+                    "publisher": item.get('publisher', 'Yahoo Finance'),
+                    "published_at": datetime.fromtimestamp(item.get('providerPublishTime', 0)).isoformat() if item.get('providerPublishTime') else None,
+                    "retrieved_at": datetime.now().isoformat(),
+                    "ticker": symbol
+                })
+            return formatted_news
+        except Exception as e:
+            return []
+
+    def get_dividends(self, symbol: str) -> Dict[str, Any]:
+        return {"success": False, "error": "Not supported", "source": "yahooapi"}
+
+    def get_splits(self, symbol: str) -> Dict[str, Any]:
+        return {"success": False, "error": "Not supported", "source": "yahooapi"}

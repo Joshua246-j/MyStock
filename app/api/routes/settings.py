@@ -3,14 +3,15 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import UserSettings
 from pydantic import BaseModel
-import datetime
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
 DEFAULT_SETTINGS = {
-    "ai_model": "gemma3:4b",
+    "ai_model": "qwen2.5:1.5b",
     "temperature": 0.2,
     "context_size": 4096,
+    "max_output_tokens": 256,
     "response_detail": "balanced",
     "default_chat_mode": "auto",
     "citation_visibility": True,
@@ -19,15 +20,15 @@ DEFAULT_SETTINGS = {
     "automatic_news_retrieval": True,
     "automatic_technical_analysis": True,
     "automatic_fundamental_analysis": True,
-    "default_market_exchange": "US",
+    "default_market_exchange": "IN",
     "default_chart_period": "1mo",
     "default_chart_interval": "1d",
-    "theme": "dark",
+    "theme": "light",
     "ui_density": "comfortable",
-    "show_advanced_metrics": False,
+    "show_advanced_metrics": True,
     "show_data_sources": True,
     "cache_ttl": 300,
-    "request_timeout": 30
+    "request_timeout": 120
 }
 
 @router.get("")
@@ -47,7 +48,7 @@ def update_settings(new_settings: dict, db: Session = Depends(get_db)):
     unknown = set(new_settings) - set(DEFAULT_SETTINGS)
     if unknown:
         raise HTTPException(status_code=422, detail=f"Unknown setting(s): {', '.join(sorted(unknown))}")
-    numeric_ranges = {"temperature": (0, 2), "context_size": (256, 131072), "max_retrieved_documents": (1, 20), "cache_ttl": (0, 86400), "request_timeout": (1, 180)}
+    numeric_ranges = {"temperature": (0, 2), "context_size": (256, 131072), "max_output_tokens": (64, 2048), "max_retrieved_documents": (1, 20), "cache_ttl": (0, 86400), "request_timeout": (1, 180)}
     for key, (minimum, maximum) in numeric_ranges.items():
         if key in new_settings:
             value = new_settings[key]
@@ -77,7 +78,7 @@ def update_settings(new_settings: dict, db: Session = Depends(get_db)):
     current = {**DEFAULT_SETTINGS, **(settings_record.settings or {})}
     current.update(new_settings)
     settings_record.settings = current
-    settings_record.updated_at = datetime.datetime.utcnow()
+    settings_record.updated_at = datetime.now(timezone.utc)
     
     db.commit()
     return current

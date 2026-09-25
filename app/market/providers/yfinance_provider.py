@@ -5,6 +5,9 @@ from app.market.providers.base import MarketDataProvider
 import pandas as pd
 from tenacity import retry, stop_after_attempt, wait_exponential
 import random
+import logging
+
+logger = logging.getLogger("stockrag.market.yfinance")
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
@@ -26,7 +29,8 @@ class YFinanceProvider(MarketDataProvider):
         try:
             return _execute()
         except Exception as e:
-            return {"success": False, "error": str(e), "symbol": symbol, "source": "yfinance", "status": "UNAVAILABLE"}
+            logger.warning("yfinance_request_failed", extra={"symbol": symbol, "reason": str(e)})
+            return {"success": False, "error": "Yahoo Finance could not provide this data. Check provider connectivity, ticker support, or rate limits.", "symbol": symbol, "source": "yfinance", "status": "UNAVAILABLE"}
 
     def get_quote(self, symbol: str) -> Dict[str, Any]:
         def _fetch():
@@ -47,12 +51,17 @@ class YFinanceProvider(MarketDataProvider):
                 "price": price,
                 "change": change,
                 "change_percent": change_percent,
+                "previous_close": prev_close,
+                "open": getattr(info, "open", None),
                 "volume": getattr(info, "last_volume", 0),
                 "market_cap": getattr(info, "market_cap", 0),
                 "currency": getattr(info, "currency", "USD"),
-                "timestamp": datetime.now().isoformat(),
-                "status": "LIVE" if price else "DELAYED",
-                "source": "yfinance"
+                # yfinance is an unofficial interface and does not provide a
+                # dependable entitlement/freshness guarantee. Never label it live.
+                "retrieved_at": datetime.now().astimezone().isoformat(),
+                "data_status": "UNVERIFIED_FRESHNESS",
+                "status": "DELAYED_OR_UNVERIFIED",
+                "source": "yfinance (unofficial; freshness not guaranteed)"
             }
         return self._safe_execute(symbol, _fetch)
 
@@ -78,7 +87,9 @@ class YFinanceProvider(MarketDataProvider):
                 "interval": interval,
                 "data": data,
                 "source": "yfinance",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().astimezone().isoformat(),
+                "data_status": "HISTORICAL",
+                "last_bar_at": str(data[-1].get("Date") or data[-1].get("Datetime") or "") if data else None
             }
         return self._safe_execute(symbol, _fetch)
 

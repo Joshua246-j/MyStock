@@ -1,55 +1,43 @@
-# PROJECT AUDIT
+# StockRAG: verified architecture and current limits
 
-## 1. Existing Architecture
-- **Backend**: FastAPI
-- **Database**: SQLite (SQLAlchemy models exist but are mostly unused in the actual business logic).
-- **Caching**: Simple in-memory dictionary cache in `app/db/cache.py` (not using SQLite for cache persistence).
-- **Market Data**: `yfinance` wrapper in `app/market/providers/yfinance_provider.py`.
-- **RAG/Documents**: PyMuPDF for extraction. ChromaDB for vector storage. Ollama for embeddings and generation.
-- **Frontend**: Single `index.html` with vanilla JS and Tailwind (via local CSS).
+This document replaces the earlier stale audit. Findings were checked against the current source on 2026-09-25. Implementation and verification notes are maintained in [PROGRESS.md](PROGRESS.md).
 
-## 2. Actual Execution Flow
-Browser -> `/static/index.html` -> Fetch APIs (`/api/stocks/{symbol}`, `/api/chat`).
-Chat logic runs `classify_query` -> analyzes dataset OR retrieves from Chroma -> sends prompt to Ollama -> returns answer.
+## Stack and request flow
 
-## 3. Existing Working Functionality
-- Application starts and API endpoints exist for market data, document upload, and chat.
-- yfinance wrapper is able to retrieve quotes, history, and fundamentals (when yfinance isn't rate-limited).
-- PDF text extraction and chunking function works.
-- Pytest unit tests for RAG mock and PDF mock pass.
+- FastAPI serves API routes and static assets from `static/`.
+- SQLAlchemy persists user settings, chat sessions/messages, document status, and a TTL cache in SQLite by default.
+- `MarketDataService` tries yfinance and uses Stooq for supported quote/history fallbacks. Technical indicators are calculated from historical data.
+- PDF pages are chunked into a persistent SQLite FTS5 lexical index and, when Ollama embeddings/Chroma are usable, also into persistent ChromaDB. Retrieval merges semantic and keyword hits and filters by indexed document ID. The keyword path is verified independently; semantic retrieval remains dependent on the local embedding model.
+- Chat classification uses explicit multi-label phrase matching plus a supplied or safely extracted ticker. Independent quote, indicator, fundamentals, news, retrieval, web crawl, and dataset work is gathered concurrently.
+- The browser uses locally served, version-pinned Tailwind, lightweight-charts, marked, DOMPurify, and Lucide assets.
 
-## 4. Broken Functionality
-- **Database**: Models are defined but never queried or populated (e.g. ChatSession, ChatMessage are empty).
-- **UI**: The UI has an "Apple-like" layout but lacks actual system status wiring, settings, and polished data presentation.
-- **RAG Grounding**: The prompt in `chat.py` does not strictly enforce citations or uncertainty.
-- **yfinance fallback**: No fallback provider is implemented if yfinance fails.
+## Source-verified capabilities
 
-## 5. Missing Functionality
-- **Settings API & UI**: No way to change models, contexts, or user preferences.
-- **Robust Orchestrator**: `chat.py` only does simple keyword matching for intent instead of a robust orchestrator.
-- **Persistent Caching**: Caching is in-memory, lost on restart.
-- **Technical Analysis**: `technical.py` is written but not exposed in the API or UI.
-- **Web Crawler**: Basic crawler exists but isn't integrated into the chat orchestrator correctly.
-- **End-to-End Tests**: Missing comprehensive integration tests.
+- Conversation turns and cache entries are written to SQLite. Cache TTL comes from settings; startup and periodic cleanup remove expired rows.
+- The selected model, temperature, context length, response detail, retrieval count, mode, request wait limits, and source visibility are read per request. Display preferences apply without restart.
+- `/api/health` pings Ollama and the selected model, checks ChromaDB, and performs an uncached provider quote check; it reports failures as unavailable.
+- Uploads have a size cap, generated storage names, PDF/dataset type checks, and persistent processing/completed/failed records. Dataset analysis is constrained to files under the upload directory.
+- API validation and HTTP errors use a structured `error` envelope. Request IDs and latency are logged.
+- Search and chart surfaces expose symbol resolution, time range, configured interval, line/candlestick rendering, and local retry states.
+- Quote responses do not claim real-time freshness. yfinance is marked freshness-unverified; Stooq is marked delayed/end-of-day. Four historical comparison charts can be selected independently. Market-provider failures have an explicit unavailable state and retry action.
+- Technical analysis calculates RSI, SMA/EMA, MACD, Bollinger bands, ATR, annualized volatility, drawdown, and returns. The displayed 20-session statistical interval is labeled experimental with a persistence baseline error and explicit limitations.
+- Settings model selection is populated from `/api/models`, which reports only locally installed Ollama models; missing models are visibly marked.
 
-## 6. Current Dependency Problems
-- Using `yfinance` directly without retry logic or rotating headers.
-- `requirements.txt` has missing test deps or conflicting versions if updated.
+## Known gaps that still matter for production readiness
 
-## 7. Recommended Architecture
-- Move Cache and Settings into SQLite.
-- Enhance Chat Orchestrator to detect exact intent, retrieve market data/tech analysis + RAG context simultaneously.
-- Upgrade UI to a modular or highly structured Tailwind layout with Settings modal.
-- Implement proper dependency injection for Market Data to allow fallbacks.
+- Ollama chat is non-streaming. There is no token-by-token UI update while generation is running.
+- The UI restores its last active conversation but does not yet list or switch among saved sessions.
+- Symbol handling validates ticker syntax and a few exchange heuristics; it is not a company-name resolver or complete exchange directory.
+- Intent routing is deterministic phrase matching, not a language-model or trained intent classifier.
+- Stooq only supplies quote and history. Fundamental, company, and news requests can still be unavailable when yfinance cannot serve them.
+- This stack does not provide a verified, exchange-licensed, reliable real-time consolidated feed. Official Alpha Vantage documentation states its default global quote is end-of-day and real-time/15-minute delayed US quotes require a paid entitlement; the free allowance is 25 requests/day. See [API quote documentation](https://www.alphavantage.co/documentation/) and [official support/data policy](https://www.alphavantage.co/support/). The current provider network is unavailable in this environment, so current quotes/charts have not been verified against real payloads.
+- The statistical scenario is not a validated forecast, has no walk-forward calibration, and assumes historical return behavior persists. It must not be presented as a reliable prediction.
+- The outer async request deadlines keep the FastAPI loop responsive, but Python worker threads cannot be forcibly stopped after a deadline. A provider request already running in a thread can finish in the background.
+- The browser’s viewport checks cover layout and horizontal overflow. Real market/chart behavior and generated answers could not be exercised in this run because market providers and Ollama were unavailable.
+- Research answer headings are prompt-guided and now checked after generation; one constrained reformat attempt runs when required headings are missing. If the repair still fails, the response is marked and carries an explicit format warning. This structure check does not prove financial claims are correct; grounding still depends on the evidence supplied.
+- There is no standalone user-defined custom-field/metric builder. Uploaded dataset questions receive bounded computed profiles of available columns, summary statistics, grouped averages, correlations, and sample rows. If users mean reusable custom formulas or saved fields, that capability is not implemented.
+- End-to-end concurrent load testing, provider behavior under real rate limits, live PDF indexing against a running Ollama/Chroma stack, and actual device testing remain open.
 
-## 8. Implementation Plan
-- **PHASE 1**: Audit (Complete)
-- **PHASE 2**: Startup + config + dependency repair (Fix imports, ensure DB path works)
-- **PHASE 3**: Market-data provider repair (Add retries/headers to yfinance)
-- **PHASE 4**: SQLite database + cache (Wire up SQLAlchemy to actually store cache, messages, settings)
-- **PHASE 5**: Technical/fundamental analysis (Wire up `technical.py` to API)
-- **PHASE 6-7**: Document Ingestion & RAG (Enhance metadata filtering, citations)
-- **PHASE 8-10**: Web Research, News, Ollama (Integrate into Orchestrator)
-- **PHASE 11**: Intelligent chat orchestration (Rewrite `/chat` endpoint)
-- **PHASE 12-14**: Settings, Citations, UI Redesign (Full frontend overhaul)
-- **PHASE 15-19**: Testing, E2E, Polish, Docs.
+## Verification record
+
+Latest follow-up verification is recorded in [PROGRESS.md](PROGRESS.md). As of this audit, actual Ollama-generated answers, semantic embedding retrieval, and provider-backed Indian live/chart payloads remain unverified because the generation/embedding models are absent and the market providers are unreachable in this environment.
