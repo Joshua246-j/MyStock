@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi import HTTPException
 
-from app.analysis.orchestrator import classify_intents, orchestrate_chat, _missing_research_sections, _citation_matches, _document_numeric_fact, _missing_fact_values, _direct_source_answer
+from app.analysis.orchestrator import classify_intents, orchestrate_chat, _missing_research_sections, _citation_matches, _document_numeric_fact, _missing_fact_values, _direct_source_answer, _unsupported_answer_terms, _answer_claims_evidence_is_missing, _unsupported_entity_relations
 from app.market.service import MarketDataService
 from app.api.routes.settings import get_settings, update_settings
 from app.db.database import Base
@@ -46,6 +46,21 @@ def test_product_workflow_question_is_not_misrouted_to_document_contents():
     )
     assert "document_qa" not in intents
     assert "general_chat" in intents
+
+
+def test_news_queries_use_web_search_but_uploaded_filing_questions_stay_scoped():
+    news = classify_intents("What are the latest news and events for AAPL?", "AAPL", {})
+    filing = classify_intents("According to the uploaded 10-K, what was latest revenue?", "AAPL", {})
+
+    assert "web_research" in news
+    assert "document_qa" in filing
+    assert "web_research" not in filing
+
+
+def test_standalone_filing_requests_route_to_indexed_document_retrieval():
+    intents = classify_intents("Find the latest 10-K filing", None, {})
+
+    assert "document_qa" in intents
 
 
 def test_market_service_falls_back_after_primary_failure():
@@ -181,23 +196,14 @@ def test_chat_route_returns_structured_service_error_and_removes_failed_user_tur
     assert any(getattr(record, "role", None) == "user" for record in db.deleted)
 
 
-def test_vector_store_client_is_initialized_once_for_concurrent_request_safety(monkeypatch):
-    created = []
-    class FakeVectorStore:
-        def __init__(self, **kwargs):
-            created.append(kwargs)
-    monkeypatch.setattr(vector_store_module, "Chroma", FakeVectorStore)
-    monkeypatch.setattr(vector_store_module, "get_embeddings", lambda: "embedding-client")
-    monkeypatch.setattr(vector_store_module, "_vector_store", None)
-
+def test_faiss_store_is_a_process_wide_singleton():
     first = vector_store_module.get_vector_store()
     second = vector_store_module.get_vector_store()
 
     assert first is second
-    assert len(created) == 1
 
 
-def test_pdf_remains_retrievable_when_ollama_embeddings_and_chroma_are_unavailable(tmp_path, monkeypatch):
+def test_pdf_remains_retrievable_when_ollama_embeddings_and_faiss_are_unavailable(tmp_path, monkeypatch):
     import pymupdf as fitz
 
     test_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -215,7 +221,7 @@ def test_pdf_remains_retrievable_when_ollama_embeddings_and_chroma_are_unavailab
             raise RuntimeError("embedding model is not installed")
 
         def similarity_search_with_score(self, *_args, **_kwargs):
-            raise RuntimeError("Chroma is offline")
+            raise RuntimeError("FAISS embeddings are unavailable")
 
     monkeypatch.setattr("app.rag.ingest.get_vector_store", BrokenVectorStore)
     monkeypatch.setattr("app.rag.retriever.get_vector_store", BrokenVectorStore)
@@ -256,6 +262,7 @@ def test_orchestrator_fans_out_and_returns_real_model_and_citations(monkeypatch)
     active = 0
     peak = 0
     lock = threading.Lock()
+    technical_request = {}
 
     def blocking_result(value):
         nonlocal active, peak
@@ -269,7 +276,9 @@ def test_orchestrator_fans_out_and_returns_real_model_and_citations(monkeypatch)
 
     class MockMarket:
         def get_quote(self, symbol, **kwargs): return blocking_result({"success": True, "price": 123, "change": 2, "change_percent": 1.6, "source": "fixture", "timestamp": "2026-09-24T10:00:00Z", "status": "LIVE"})
-        def get_technical_analysis(self, symbol, **kwargs): return blocking_result({"success": True, "metrics": {"RSI_14": 51.2}})
+        def get_technical_analysis(self, symbol, **kwargs):
+            technical_request.update(symbol=symbol, **kwargs)
+            return blocking_result({"success": True, "metrics": {"RSI_14": 51.2}, "source": "fixture", "last_bar_at": "2026-10-08"})
         def get_financials(self, symbol, **kwargs): return {"success": False}
         def get_news(self, symbol, **kwargs): return []
 
@@ -286,6 +295,10 @@ def test_orchestrator_fans_out_and_returns_real_model_and_citations(monkeypatch)
         symbol="AAPL",
         model="test-model:latest",
         settings={"request_timeout": 5, "ai_model": "test-model:latest", "automatic_technical_analysis": True},
+        chart_period="3mo",
+        chart_interval="1wk",
+        chart_mode="candlestick",
+        chart_view="rsi",
         market_data=MockMarket(),
         retriever=MockRetriever(),
     ))
@@ -296,6 +309,67 @@ def test_orchestrator_fans_out_and_returns_real_model_and_citations(monkeypatch)
     assert result["sources_unverified"] is False
     assert result["format_unverified"] is False
     assert "earnings.pdf — Page 2" in result["citations"]
+    assert technical_request == {"symbol": "AAPL", "period": "3mo", "interval": "1wk"}
+    assert any("3mo, 1wk" in citation and "2026-10-08" in citation for citation in result["citations"])
+    assert result["structured_analysis"]["chart_context"] == {"symbol": "AAPL", "period": "3mo", "interval": "1wk", "mode": "candlestick", "view": "rsi"}
+
+
+def test_orchestrator_uses_recent_conversation_context_for_followup_rag(monkeypatch):
+    observed = {}
+    requested_market_tools = []
+
+    class MockRetriever:
+        def retrieve_context(self, query, **kwargs):
+            observed["query"] = query
+            return {"context": "Revenue was $100 million in FY2025.", "sources": ["fixture.pdf — Page 2"],
+                    "passages": [{"content": "Revenue was $100 million in FY2025.", "source": "fixture.pdf — Page 2"}],
+                    "retrieval_mode": "hybrid", "degraded": False}
+
+    async def mock_check_health(*_args, **_kwargs): return True
+    async def mock_chat(*_args, **_kwargs):
+        return "## Answer\nThe earlier period is in the retrieved filing.\n\n## Key Facts\n- The filing includes prior-year revenue.\n\n## Analysis\nThe document provides the requested context.\n\n## Limitations\nOnly the retrieved passage was checked.\n\n## Sources\n- fixture.pdf — Page 2"
+    class MockMarket:
+        def get_quote(self, *_args, **_kwargs):
+            requested_market_tools.append("quote")
+            return {"success": False, "error": "unexpected quote request"}
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.check_health", mock_check_health)
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.chat", mock_chat)
+
+    result = asyncio.run(orchestrate_chat(
+        "What about the prior year?", symbol="TSTX",
+        history=[{"role": "user", "content": "According to the uploaded 10-K, what was revenue for FY2025?"}],
+        settings={"request_timeout": 5}, market_data=MockMarket(), retriever=MockRetriever(),
+    ))
+
+    assert "FY2025" in observed["query"] and "Follow-up: What about the prior year?" in observed["query"]
+    assert result["structured_analysis"]["evidence_types"] == ["documents"]
+    assert result["retrieval"]["documents"] == 1
+    assert requested_market_tools == []
+
+
+def test_explicit_prompt_ticker_overrides_the_open_chart_symbol(monkeypatch):
+    requested_symbols = []
+
+    class MockMarket:
+        def get_quote(self, symbol, **_kwargs):
+            requested_symbols.append(symbol)
+            return {"success": True, "price": 100, "change": 1, "change_percent": 1, "source": "fixture", "timestamp": "2026-10-10T10:00:00Z", "status": "LIVE"}
+
+    class MockRetriever:
+        def retrieve_context(self, *_args, **_kwargs): return {"context": "", "sources": []}
+
+    async def mock_check_health(*_args, **_kwargs): return True
+    async def mock_chat(*_args, **_kwargs):
+        return "## Answer\nMSFT is at the supplied provider price.\n\n## Key Facts\n- Provider price supplied.\n\n## Analysis\nNo additional calculation.\n\n## Limitations\nProvider freshness is not verified.\n\n## Sources\n- Market quote"
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.check_health", mock_check_health)
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.chat", mock_chat)
+
+    asyncio.run(orchestrate_chat(
+        "What is MSFT current price?", symbol="AAPL",
+        settings={"request_timeout": 5}, market_data=MockMarket(), retriever=MockRetriever(),
+    ))
+
+    assert requested_symbols == ["MSFT"]
 
 
 def test_research_response_contract_requires_explicit_sections():
@@ -303,6 +377,68 @@ def test_research_response_contract_requires_explicit_sections():
     assert _missing_research_sections(valid, require_sources=True) == []
     assert _missing_research_sections("## Answer\nA", require_sources=True) == ["Key Facts", "Analysis", "Limitations", "Sources"]
     assert _citation_matches("verified_revenue_fixture.pdf — Page 1", "\n- verified_revenue_fixture.pdf — Page 1\n")
+
+
+def test_concise_research_allows_inline_answer_and_requires_sources_only():
+    response = "The source says Products and Services.\n\n## Sources\n- SEC AAPL 10-K"
+    assert _missing_research_sections(response, require_sources=True, detail="concise") == []
+
+
+def test_document_answer_guard_detects_unsupported_product_names():
+    response = (
+        "## Answer Two categories are ‘Smartphones’ and ‘Personal Computers’.\n\n"
+        "## Sources\n- SEC AAPL 10-K"
+    )
+    passages = [{"content": "Net sales: Products $307,003 million; Services $109,158 million."}]
+    assert {"smartphones", "personal", "computers"}.issubset(
+        set(_unsupported_answer_terms(response, "Name two product categories in the Apple 10-K.", passages))
+    )
+
+
+def test_document_answer_guard_detects_internal_evidence_contradiction():
+    response = (
+        "## Answer The categories are smartphones and personal computers.\n\n"
+        "## Analysis The evidence does not provide specific product categories."
+    )
+    assert _answer_claims_evidence_is_missing(response)
+
+
+def test_document_answer_guard_rejects_entity_relation_not_in_same_passage():
+    response = "The Mac line includes laptops and iPad."
+    passages = [
+        {"content": "Mac is the company's line of personal computers that includes laptops."},
+        {"content": "iPad is a separate product line of tablets."},
+    ]
+    assert _unsupported_entity_relations(response, "What do iPhone and Mac refer to?", passages) == ["ipad"]
+
+
+def test_document_answer_guard_withholds_unsupported_generated_claim(monkeypatch):
+    class MockRetriever:
+        def retrieve_context(self, *args, **kwargs):
+            source = "SEC AAPL 10-K — https://www.sec.gov/Archives/aapl.htm"
+            content = "Net sales: Products $307,003 million; Services $109,158 million."
+            return {"context": content, "sources": [source], "passages": [{"content": content, "source": source}],
+                    "retrieval_mode": "hybrid", "degraded": False}
+
+    async def mock_check_health(*_args, **_kwargs): return True
+    async def mock_chat(*_args, **_kwargs):
+        return (
+            "## Answer Two product categories are ‘Smartphones’ and ‘Personal Computers’.\n\n"
+            "## Sources\n- SEC AAPL 10-K — https://www.sec.gov/Archives/aapl.htm"
+        )
+
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.check_health", mock_check_health)
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.chat", mock_chat)
+    result = asyncio.run(orchestrate_chat(
+        "Name two product categories in the Apple 10-K.", settings={"request_timeout": 5, "response_detail": "concise"},
+        mode="documents", document_ids=[1], retriever=MockRetriever(),
+    ))
+
+    assert result["numeric_validation"] == "not_applicable"
+    assert result["answer_method"] == "deterministic_rag_insufficient_evidence"
+    assert "couldn't verify a direct answer" in result["answer"]
+    assert "Smartphones" not in result["answer"]
+    assert result["sources_unverified"] is False
 
 
 def test_document_numeric_validation_uses_exact_source_when_model_drops_value():
@@ -318,11 +454,84 @@ def test_document_numeric_validation_uses_exact_source_when_model_drops_value():
     assert _missing_research_sections(fallback, require_sources=True) == []
 
 
+def test_numeric_document_question_uses_exact_extracted_value_without_calling_model(monkeypatch):
+    class MockRetriever:
+        def retrieve_context(self, *args, **kwargs):
+            assert kwargs["metadata_filter"] == {"ticker": "TSTX", "document_type": "10-K"}
+            return {"context": "Revenue for FY2025 was $125 million.", "sources": ["fixture.pdf — Page 1"],
+                    "passages": [{"content": "Revenue for FY2025 was $125 million.", "source": "fixture.pdf — Page 1"}],
+                    "retrieval_mode": "hybrid", "degraded": False}
+
+    async def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("Numeric document facts must be returned from the source passage")
+
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.check_health", fail_if_called)
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.chat", fail_if_called)
+    result = asyncio.run(orchestrate_chat(
+        "According to the uploaded TSTX 10-K, what was revenue for FY2025?",
+        symbol="TSTX", settings={"request_timeout": 5}, retriever=MockRetriever(),
+    ))
+
+    assert result["answer_method"] == "extractive_source_fallback"
+    assert "$125 million" in result["answer"]
+    assert "fixture.pdf — Page 1" in result["citations"]
+    assert "fundamental" not in result["structured_analysis"]["evidence_types"]
+
+
+def test_numeric_document_question_withholds_value_when_source_has_no_number(monkeypatch):
+    class MockRetriever:
+        def retrieve_context(self, *args, **kwargs):
+            return {"context": "Revenue information is discussed.", "sources": ["fixture.pdf — Page 1"],
+                    "passages": [{"content": "Revenue information is discussed.", "source": "fixture.pdf — Page 1"}],
+                    "retrieval_mode": "keyword", "degraded": True}
+
+    async def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("Insufficient document evidence must not be sent to generation")
+
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.check_health", fail_if_called)
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.chat", fail_if_called)
+    result = asyncio.run(orchestrate_chat(
+        "According to the uploaded TSTX 10-K, what was revenue for FY2025?",
+        symbol="TSTX", settings={"request_timeout": 5}, retriever=MockRetriever(),
+    ))
+
+    assert result["numeric_validation"] == "insufficient_evidence"
+    assert "could not be verified" in result["answer"]
+    assert result["sources_unverified"] is False
+    assert result["answer_method"] == "deterministic_insufficient_evidence"
+    assert result["model"] is None
+
+
+def test_numeric_document_answer_does_not_substitute_a_different_financial_metric(monkeypatch):
+    class MockRetriever:
+        def retrieve_context(self, *args, **kwargs):
+            source = "fixture.pdf — Page 1"
+            text = "Revenue was 735 million dollars for fiscal 2026."
+            return {"context": text, "sources": [source], "passages": [{"content": text, "source": source}],
+                    "retrieval_mode": "hybrid", "degraded": False}
+
+    async def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("An unrelated numeric fact must not be substituted for the requested metric")
+
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.check_health", fail_if_called)
+    monkeypatch.setattr("app.analysis.orchestrator.ollama_client.chat", fail_if_called)
+    result = asyncio.run(orchestrate_chat(
+        "According to the uploaded TSTX 10-K, what was net income for FY2026?",
+        symbol="TSTX", settings={"request_timeout": 5}, retriever=MockRetriever(),
+    ))
+
+    assert result["numeric_validation"] == "insufficient_evidence"
+    assert "could not be verified" in result["answer"]
+
+
 def test_model_capability_filter_hides_embedding_only_models_from_chat_selection():
     assert OllamaClient._supports({"capabilities": ["completion", "tools"]}, "generation")
     assert not OllamaClient._supports({"capabilities": ["embedding"]}, "generation")
     assert OllamaClient._supports({"capabilities": ["embedding"]}, "embedding")
     assert not OllamaClient._supports({"capabilities": ["completion"]}, "embedding")
+    assert not OllamaClient._supports({"name": "nomic-embed-text:latest"}, "generation")
+    assert OllamaClient._supports({"name": "qwen3:8b"}, "generation")
+    assert OllamaClient._supports({"name": "nomic-embed-text:latest"}, "embedding")
 
 
 def test_ollama_client_rejects_truncated_output_instead_of_returning_a_partial_answer():

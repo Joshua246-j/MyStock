@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Build against the actual app sources; the stylesheet lives in this folder. */
+@source "./index.html";
+@source "./app.js";
+
 @custom-variant dark (&:where(html[data-theme="dark"], html[data-theme="dark"] *));
 
 @theme {

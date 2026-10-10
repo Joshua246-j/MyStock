@@ -1,6 +1,6 @@
 import httpx
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 from app.market.providers.base import MarketDataProvider
 import os
@@ -9,6 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class FinnhubProvider(MarketDataProvider):
+    supports_company_news = True
     """
     Provides market data using the Finnhub API.
     Requires FINNHUB_API_KEY environment variable.
@@ -143,9 +144,12 @@ class FinnhubProvider(MarketDataProvider):
                 formatted.append({
                     "title": item.get("headline"),
                     "publisher": item.get("source"),
-                    "link": item.get("url"),
-                    "publishedAt": datetime.fromtimestamp(item.get("datetime")).isoformat() if item.get("datetime") else None,
-                    "summary": item.get("summary")
+                    "url": item.get("url"),
+                    "published_at": datetime.fromtimestamp(item.get("datetime"), timezone.utc).isoformat() if item.get("datetime") else None,
+                    "summary": item.get("summary"),
+                    "image": item.get("image") or None,
+                    "ticker": symbol,
+                    "related_tickers": [str(symbol).upper()],
                 })
             return formatted
         return []

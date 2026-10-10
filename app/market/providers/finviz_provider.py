@@ -9,6 +9,10 @@ from app.market.providers.base import MarketDataProvider
 logger = logging.getLogger("stockrag.market.finviz")
 
 class FinvizProvider(MarketDataProvider):
+    # The page news table mixes market headlines and does not expose a
+    # verifiable per-article ticker mapping.
+    supports_company_news = False
+
     """
     A market data provider that scrapes Finviz.com for premium fundamentals,
     company profile, and recent news without requiring API keys.

@@ -1,14 +1,17 @@
 import urllib.request
 import json
 import logging
+import re
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.market.providers.base import MarketDataProvider
 import time
 
 logger = logging.getLogger("stockrag.market.yahooapi")
 
 class YahooApiProvider(MarketDataProvider):
+    supports_company_news = True
+
     """
     Directly hits Yahoo Finance JSON API endpoints as a lightweight fallback 
     when the yfinance library fails or gets rate-limited.
@@ -164,21 +167,49 @@ class YahooApiProvider(MarketDataProvider):
         return {"success": False, "error": "Not supported", "source": "yahooapi"}
 
     def get_news(self, symbol: str) -> List[Dict[str, Any]]:
-        # Yahoo direct search API for news
+        # Yahoo's symbol search mixes company coverage with market-wide stories.
+        # Keep only items explicitly tagged to this symbol and whose headline or
+        # excerpt also names the company/ticker, so a broad tag alone cannot
+        # mislabel unrelated articles as company news.
         try:
             url = f"https://query2.finance.yahoo.com/v1/finance/search?q={symbol}&newsCount=10"
             data = self._fetch(url)
             news_items = data.get('news', [])
-            
+            normalized_symbol = str(symbol).strip().upper()
+            quote = next((
+                item for item in data.get("quotes", [])
+                if str(item.get("symbol", "")).upper() == normalized_symbol
+            ), {})
+            company = str(quote.get("longname") or quote.get("shortname") or "").strip()
+            company = re.sub(r"\b(?:incorporated|corporation|company|limited|inc|corp|co|ltd)\.?$", "", company, flags=re.I).strip()
+            base_symbol = normalized_symbol.split(".", 1)[0].lstrip("^")
+
+            def mentions_target(text: str) -> bool:
+                if re.search(rf"(?<![A-Z0-9]){re.escape(normalized_symbol)}(?![A-Z0-9])", text, re.I):
+                    return True
+                if base_symbol and base_symbol != normalized_symbol and re.search(rf"(?<![A-Z0-9]){re.escape(base_symbol)}(?![A-Z0-9])", text, re.I):
+                    return True
+                return bool(company and re.search(rf"(?<!\w){re.escape(company)}(?!\w)", text, re.I))
+
             formatted_news = []
             for item in news_items:
+                related = item.get("relatedTickers") or []
+                related_symbols = {str(value).strip().upper() for value in related if value}
+                title = str(item.get("title") or "").strip()
+                summary = str(item.get("summary") or "").strip()
+                if normalized_symbol not in related_symbols or not mentions_target(f"{title} {summary}"):
+                    continue
+                published = item.get("providerPublishTime")
                 formatted_news.append({
-                    "title": item.get('title', ''),
+                    "title": title,
                     "url": item.get('link', ''),
                     "publisher": item.get('publisher', 'Yahoo Finance'),
-                    "published_at": datetime.fromtimestamp(item.get('providerPublishTime', 0)).isoformat() if item.get('providerPublishTime') else None,
-                    "retrieved_at": datetime.now().isoformat(),
-                    "ticker": symbol
+                    "published_at": datetime.fromtimestamp(published, timezone.utc).isoformat() if isinstance(published, (int, float)) and published else None,
+                    "summary": summary,
+                    "image": next((entry.get('url') for entry in (item.get('thumbnail') or {}).get('resolutions', []) if entry.get('url')), None),
+                    "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                    "ticker": normalized_symbol,
+                    "related_tickers": sorted(related_symbols),
                 })
             return formatted_news
         except Exception as e:

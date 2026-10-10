@@ -7,7 +7,7 @@ class IMarketData(ABC):
         pass
         
     @abstractmethod
-    def get_technical_analysis(self, symbol: str, period: str = "6mo") -> Dict[str, Any]:
+    def get_technical_analysis(self, symbol: str, period: str = "6mo", interval: str = "1d") -> Dict[str, Any]:
         pass
         
     @abstractmethod
@@ -20,5 +20,5 @@ class IMarketData(ABC):
 
 class IRetriever(ABC):
     @abstractmethod
-    def retrieve_context(self, message: str, k: int = 5, document_ids: Optional[List[int]] = None) -> Dict[str, Any]:
+    def retrieve_context(self, message: str, k: int = 5, document_ids: Optional[List[int]] = None, metadata_filter: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         pass

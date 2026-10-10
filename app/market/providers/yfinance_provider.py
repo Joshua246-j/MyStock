@@ -1,6 +1,6 @@
 import yfinance as yf
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.market.providers.base import MarketDataProvider
 import pandas as pd
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -16,6 +16,10 @@ USER_AGENTS = [
 ]
 
 class YFinanceProvider(MarketDataProvider):
+    # Yahoo ticker search can include loosely tagged market-wide headlines.
+    # Company-news feeds are served by the verified/tag-filtered fallback.
+    supports_company_news = False
+
     def __init__(self):
         yf.defaults = getattr(yf, "defaults", {})
 
@@ -166,12 +170,33 @@ class YFinanceProvider(MarketDataProvider):
             news = ticker.news
             formatted_news = []
             for item in news:
+                content = item.get("content") or {}
+                if not isinstance(content, dict):
+                    content = {}
+                thumbnail = item.get("thumbnail") or content.get("thumbnail") or {}
+                if not isinstance(thumbnail, dict):
+                    thumbnail = {}
+                resolutions = thumbnail.get("resolutions") or []
+                image = next((entry.get("url") for entry in resolutions if entry.get("url")), None)
+                if not image and isinstance(content.get("thumbnail"), dict):
+                    image = content["thumbnail"].get("originalUrl")
+                canonical = content.get("canonicalUrl") or {}
+                provider = content.get("provider") or {}
+                if not isinstance(canonical, dict):
+                    canonical = {}
+                if not isinstance(provider, dict):
+                    provider = {}
+                published = item.get("providerPublishTime")
+                if not published and isinstance(content.get("pubDate"), (int, float)):
+                    published = content.get("pubDate")
                 formatted_news.append({
-                    "title": item.get("title", ""),
-                    "url": item.get("link", ""),
-                    "publisher": item.get("publisher", ""),
-                    "published_at": datetime.fromtimestamp(item.get("providerPublishTime", 0)).isoformat() if item.get("providerPublishTime") else None,
-                    "retrieved_at": datetime.now().isoformat(),
+                    "title": item.get("title") or content.get("title", ""),
+                    "url": item.get("link") or canonical.get("url", ""),
+                    "publisher": item.get("publisher") or provider.get("displayName", ""),
+                    "published_at": datetime.fromtimestamp(published, timezone.utc).isoformat() if isinstance(published, (int, float)) and published else None,
+                    "summary": content.get("summary", ""),
+                    "image": image,
+                    "retrieved_at": datetime.now(timezone.utc).isoformat(),
                     "ticker": symbol
                 })
             return formatted_news

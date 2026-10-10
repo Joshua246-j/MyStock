@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .env
 data/chroma/
+data/faiss/
 uploads/
 .pytest_cache/
 .pytest-tmp/

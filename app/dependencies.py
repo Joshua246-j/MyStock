@@ -30,8 +30,8 @@ from app.rag.retriever import retrieve_context
 from app.analysis.prompt_builder import PromptBuilder
 
 class DefaultRetriever(IRetriever):
-    def retrieve_context(self, message: str, k: int = 5, document_ids: list = None) -> Dict[str, Any]:
-        return retrieve_context(message, k=k, document_ids=document_ids)
+    def retrieve_context(self, message: str, k: int = 5, document_ids: list = None, metadata_filter: dict | None = None) -> Dict[str, Any]:
+        return retrieve_context(message, k=k, document_ids=document_ids, metadata_filter=metadata_filter)
 
 default_retriever = DefaultRetriever()
 prompt_builder = PromptBuilder()

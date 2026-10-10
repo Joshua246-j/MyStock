@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     UPSTOX_ACCESS_TOKEN: str = ""
     FINNHUB_API_KEY: str = ""
     
-    CHROMA_PATH: str = "data/chroma"
+    FAISS_PATH: str = "data/faiss"
     UPLOAD_DIR: str = "uploads"
     
-    @field_validator("CHROMA_PATH", "UPLOAD_DIR", mode="before")
+    @field_validator("FAISS_PATH", "UPLOAD_DIR", mode="before")
     @classmethod
     def make_absolute_path(cls, v: str) -> str:
         if not v:
@@ -32,11 +32,11 @@ OLLAMA_MODEL = settings.OLLAMA_MODEL
 EMBEDDING_MODEL = settings.EMBEDDING_MODEL
 UPSTOX_ACCESS_TOKEN = settings.UPSTOX_ACCESS_TOKEN
 FINNHUB_API_KEY = settings.FINNHUB_API_KEY
-CHROMA_PATH = settings.CHROMA_PATH
+FAISS_PATH = settings.FAISS_PATH
 UPLOAD_DIR = settings.UPLOAD_DIR
 
 # Create necessary directories
-os.makedirs(CHROMA_PATH, exist_ok=True)
+os.makedirs(FAISS_PATH, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(PROJECT_ROOT / "data" / "documents", exist_ok=True)
 os.makedirs(PROJECT_ROOT / "data" / "datasets", exist_ok=True)

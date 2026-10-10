@@ -1,13 +1,22 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON, UniqueConstraint
 from app.db.database import Base
 import datetime
+
+
+def utcnow_naive() -> datetime.datetime:
+    """Return UTC with SQLite-compatible naive timestamps for existing columns."""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
     
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String, unique=True, index=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow_naive)
+    parent_session_id = Column(String, nullable=True, index=True)
+    branch_from_message_id = Column(Integer, nullable=True)
+    document_ids = Column(JSON, nullable=False, default=list)
+    dataset_id = Column(Integer, nullable=True)
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
@@ -16,8 +25,9 @@ class ChatMessage(Base):
     session_id = Column(String, index=True)
     role = Column(String)  # 'user' or 'assistant'
     content = Column(Text)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow_naive)
     sources = Column(JSON, nullable=True)
+    metadata_json = Column(JSON, nullable=False, default=dict)
 
 class DocumentMetadata(Base):
     __tablename__ = "documents"
@@ -26,8 +36,58 @@ class DocumentMetadata(Base):
     filename = Column(String, index=True)
     document_type = Column(String)
     storage_path = Column(String, nullable=True)
-    uploaded_at = Column(DateTime, default=datetime.datetime.utcnow)
+    metadata_json = Column(JSON, nullable=False, default=dict)
+    uploaded_at = Column(DateTime, default=utcnow_naive)
     status = Column(String) # 'processing', 'completed', 'failed'
+
+class PriceBar(Base):
+    __tablename__ = "price_bars"
+    __table_args__ = (UniqueConstraint("symbol", "bar_at", "interval", "source", name="uq_price_bar_identity"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String, nullable=False, index=True)
+    bar_at = Column(DateTime, nullable=False, index=True)
+    interval = Column(String, nullable=False)
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    adj_close = Column(Float, nullable=True)
+    volume = Column(Float, nullable=False)
+    source = Column(String, nullable=False)
+    retrieved_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    data_status = Column(String, nullable=False, default="UNKNOWN")
+
+class FundamentalMetric(Base):
+    __tablename__ = "fundamental_metrics"
+    __table_args__ = (UniqueConstraint("symbol", "metric", "period", "source", name="uq_fundamental_metric_identity"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String, nullable=False, index=True)
+    metric = Column(String, nullable=False)
+    value = Column(Float, nullable=False)
+    period = Column(String, nullable=False, default="latest")
+    source = Column(String, nullable=False)
+    retrieved_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    data_status = Column(String, nullable=False, default="UNVERIFIED_FRESHNESS")
+
+class NewsArticle(Base):
+    __tablename__ = "news_articles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String, nullable=False, index=True)
+    ticker = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    publisher = Column(String, nullable=True)
+    related_tickers = Column(JSON, nullable=False, default=list)
+    summary = Column(String, nullable=True)
+    image = Column(String, nullable=True)
+    url = Column(String, nullable=False, unique=True, index=True)
+    published_at = Column(DateTime, nullable=True, index=True)
+    retrieved_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    content_hash = Column(String, nullable=False, index=True)
+    sentiment = Column(String, nullable=True)
+    sentiment_score = Column(Float, nullable=True)
 
 class CacheEntry(Base):
     __tablename__ = "cache_entries"
@@ -35,7 +95,7 @@ class CacheEntry(Base):
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String, unique=True, index=True)
     value = Column(JSON)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow_naive)
     expires_at = Column(DateTime)
     source = Column(String)
 
@@ -44,4 +104,4 @@ class UserSettings(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     settings = Column(JSON, default=dict)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)

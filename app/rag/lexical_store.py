@@ -1,5 +1,6 @@
 """Persistent SQLite full-text index used when semantic embeddings are unavailable."""
 import re
+import json
 from typing import Any
 
 from sqlalchemy import text
@@ -20,61 +21,83 @@ def ensure_lexical_index() -> None:
                 tokenize='unicode61'
             )"""
         )
+        connection.exec_driver_sql(
+            """CREATE TABLE IF NOT EXISTS rag_chunk_metadata (
+                chunk_rowid INTEGER PRIMARY KEY,
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            )"""
+        )
+        connection.exec_driver_sql("""CREATE TABLE IF NOT EXISTS rag_vector_map (
+            faiss_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chunk_rowid INTEGER NOT NULL UNIQUE
+        )""")
+        # Preserve compatibility with FTS rows created by older releases.
+        legacy = connection.execute(text("""SELECT f.rowid, f.source, f.filename,
+            f.document_id, f.page, f.document_type, f.url
+            FROM rag_chunks f LEFT JOIN rag_chunk_metadata m ON m.chunk_rowid=f.rowid
+            WHERE m.chunk_rowid IS NULL""")).mappings().all()
+        for row in legacy:
+            metadata = {key: row[key] for key in ("source", "filename", "document_id", "page", "document_type", "url")}
+            metadata["source_type"] = "web" if row["document_type"] == "web" else "user_upload"
+            metadata["title"] = row["source"] or row["filename"]
+            connection.execute(text("INSERT OR IGNORE INTO rag_chunk_metadata(chunk_rowid, metadata_json) VALUES (:rowid, :metadata)"),
+                               {"rowid": row["rowid"], "metadata": json.dumps(metadata)})
+
+
+def _insert_records(chunks: list[str], metadatas: list[dict[str, Any]]) -> list[int]:
+    if not chunks:
+        return []
+    if len(chunks) != len(metadatas):
+        raise ValueError("Every indexed chunk must have exactly one metadata record.")
+    ensure_lexical_index()
+    with engine.begin() as connection:
+        rowids = []
+        for chunk, metadata in zip(chunks, metadatas):
+            row = {
+                "content": chunk,
+                "source": str(metadata.get("source") or metadata.get("title") or metadata.get("filename") or "Unknown"),
+                "filename": str(metadata.get("filename") or ""),
+                "document_id": str(metadata.get("document_id", "0")),
+                "page": str(metadata.get("page", "")),
+                "document_type": str(metadata.get("document_type") or "document"),
+                "url": str(metadata.get("url") or metadata.get("source_url") or ""),
+            }
+            result = connection.execute(text("""INSERT INTO rag_chunks
+                (content, source, filename, document_id, page, document_type, url)
+                VALUES (:content, :source, :filename, :document_id, :page, :document_type, :url)"""), row)
+            chunk_rowid = result.lastrowid
+            rowids.append(int(chunk_rowid))
+            connection.execute(text("""INSERT INTO rag_chunk_metadata(chunk_rowid, metadata_json)
+                VALUES (:rowid, :metadata)"""), {
+                    "rowid": chunk_rowid,
+                    "metadata": json.dumps(metadata, ensure_ascii=False, default=str),
+                })
+    return rowids
+
+
+def _index_records(chunks: list[str], metadatas: list[dict[str, Any]]) -> int:
+    return len(_insert_records(chunks, metadatas))
 
 
 def index_chunks(chunks: list[str], metadata: dict[str, Any]) -> int:
-    if not chunks:
-        return 0
-    ensure_lexical_index()
-    records = []
-    for chunk in chunks:
-        records.append({
-            "content": chunk,
-            "source": str(metadata.get("source") or metadata.get("filename") or "Unknown"),
-            "filename": str(metadata.get("filename") or ""),
-            "document_id": str(metadata.get("document_id", "0")),
-            "page": str(metadata.get("page", "")),
-            "document_type": str(metadata.get("document_type") or "document"),
-            "url": str(metadata.get("url") or ""),
-        })
-    with engine.begin() as connection:
-        connection.execute(text("""INSERT INTO rag_chunks
-            (content, source, filename, document_id, page, document_type, url)
-            VALUES (:content, :source, :filename, :document_id, :page,
-                    :document_type, :url)"""), records)
-    return len(records)
+    return _index_records(chunks, [metadata for _ in chunks])
 
 def index_chunks_batch(chunks: list[str], metadatas: list[dict[str, Any]]) -> int:
-    if not chunks:
-        return 0
-    ensure_lexical_index()
-    records = []
-    for chunk, metadata in zip(chunks, metadatas):
-        records.append({
-            "content": chunk,
-            "source": str(metadata.get("source") or metadata.get("filename") or "Unknown"),
-            "filename": str(metadata.get("filename") or ""),
-            "document_id": str(metadata.get("document_id", "0")),
-            "page": str(metadata.get("page", "")),
-            "document_type": str(metadata.get("document_type") or "document"),
-            "url": str(metadata.get("url") or ""),
-        })
-    with engine.begin() as connection:
-        connection.execute(text("""INSERT INTO rag_chunks
-            (content, source, filename, document_id, page, document_type, url)
-            VALUES (:content, :source, :filename, :document_id, :page,
-                    :document_type, :url)"""), records)
-    return len(records)
+    return _index_records(chunks, metadatas)
 
 
-def search_chunks(query: str, k: int = 5, document_ids: list[int] | None = None) -> list[dict[str, Any]]:
+def index_chunks_batch_with_ids(chunks: list[str], metadatas: list[dict[str, Any]]) -> list[int]:
+    return _insert_records(chunks, metadatas)
+
+
+def search_chunks(query: str, k: int = 5, document_ids: list[int] | None = None, metadata_filter: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     terms = list(dict.fromkeys(token for token in _TOKEN.findall(query.casefold()) if len(token) > 1))
     if not terms or k < 1:
         return []
     ensure_lexical_index()
     # Quote each term to prevent user input from injecting FTS operators.
     match_query = " OR ".join('"' + term.replace('"', '""') + '"' for term in terms[:24])
-    sql = "SELECT content, source, filename, document_id, page, document_type, url, bm25(rag_chunks) AS rank FROM rag_chunks WHERE rag_chunks MATCH :query"
+    sql = "SELECT f.rowid AS chunk_rowid, f.content, f.source, f.filename, f.document_id, f.page, f.document_type, f.url, m.metadata_json, bm25(rag_chunks) AS rank FROM rag_chunks f LEFT JOIN rag_chunk_metadata m ON m.chunk_rowid=f.rowid WHERE rag_chunks MATCH :query"
     params: dict[str, Any] = {"query": match_query, "limit": int(k)}
     if document_ids:
         placeholders = []
@@ -82,21 +105,59 @@ def search_chunks(query: str, k: int = 5, document_ids: list[int] | None = None)
             key = f"document_id_{index}"
             placeholders.append(f":{key}")
             params[key] = str(document_id)
-        sql += f" AND document_id IN ({', '.join(placeholders)})"
+        sql += f" AND f.document_id IN ({', '.join(placeholders)})"
+    fields = {"company", "ticker", "exchange", "country", "sector", "industry", "source_type", "document_type", "source_url", "title", "published_at", "filing_date", "period_start", "period_end"}
+    for field, expected in (metadata_filter or {}).items():
+        if field not in fields or expected is None:
+            continue
+        values = expected.get("$in") if isinstance(expected, dict) else None
+        if values is None:
+            values = [expected.get("$eq")] if isinstance(expected, dict) else expected if isinstance(expected, (list, tuple, set)) else [expected]
+        values = [str(value) for value in values if value is not None]
+        if not values:
+            return []
+        path = f"$.{field}"
+        if len(values) == 1:
+            key = f"filter_{field}"
+            params[key] = values[0]
+            sql += f" AND json_extract(m.metadata_json, '{path}') COLLATE NOCASE = :{key}"
+        else:
+            placeholders = []
+            for index, value in enumerate(values):
+                key = f"filter_{field}_{index}"
+                params[key] = value
+                placeholders.append(f":{key}")
+            sql += f" AND json_extract(m.metadata_json, '{path}') COLLATE NOCASE IN ({', '.join(placeholders)})"
     sql += " ORDER BY rank ASC LIMIT :limit"
     with engine.connect() as connection:
         rows = connection.execute(text(sql), params).mappings().all()
-    return [dict(row) for row in rows]
+    result = []
+    for row in rows:
+        item = dict(row)
+        metadata = json.loads(item.pop("metadata_json") or "{}")
+        item.update(metadata)
+        result.append(item)
+    return result
 
 
 def delete_document_chunks(document_id: int) -> int:
     ensure_lexical_index()
     with engine.begin() as connection:
+        connection.execute(text("""DELETE FROM rag_vector_map WHERE chunk_rowid IN
+            (SELECT rowid FROM rag_chunks WHERE document_id = :document_id)"""),
+            {"document_id": str(document_id)})
+        connection.execute(text("""DELETE FROM rag_chunk_metadata WHERE chunk_rowid IN
+            (SELECT rowid FROM rag_chunks WHERE document_id = :document_id)"""),
+            {"document_id": str(document_id)})
         result = connection.execute(
             text("DELETE FROM rag_chunks WHERE document_id = :document_id"),
             {"document_id": str(document_id)},
         )
-        return result.rowcount or 0
+        removed = result.rowcount or 0
+    if removed:
+        from app.rag.vector_store import invalidate_vector_index
+        invalidate_vector_index()
+    return removed
 
 
 def lexical_index_available() -> bool:

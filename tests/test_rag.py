@@ -3,10 +3,15 @@ from app.rag.ingest import chunk_and_store
 from app.rag.retriever import retrieve_context
 
 from unittest.mock import patch, MagicMock
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+from app.rag import lexical_store
 
 @patch('app.rag.ingest.get_vector_store')
 @patch('app.rag.retriever.get_vector_store')
-def test_rag_ingest_and_retrieve(mock_retriever_vs, mock_ingest_vs):
+def test_rag_ingest_and_retrieve(mock_retriever_vs, mock_ingest_vs, monkeypatch):
+    test_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    monkeypatch.setattr(lexical_store, "engine", test_engine)
     # Mocking the vector store behavior
     mock_vs_instance = MagicMock()
     mock_ingest_vs.return_value = mock_vs_instance
