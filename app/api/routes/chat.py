@@ -1,13 +1,10 @@
 import asyncio
 import logging
-import re
-import uuid
 import json
 from fastapi.responses import StreamingResponse
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Literal
-from pathlib import Path
 from sqlalchemy.orm import Session
 from app.db.database import get_db, SessionLocal
 from app.services.chat import ChatService
@@ -31,6 +28,15 @@ class ChatRequest(BaseModel):
     chart_interval: Literal["1d", "1wk", "1mo"] | None = None
     chart_mode: Literal["line", "candlestick"] | None = None
     chart_view: Literal["price", "volume", "trend", "bollinger", "rsi", "macd", "atr", "performance"] | None = None
+    web_crawl: bool | None = None
+    model: str | None = None
+    temperature: float | None = None
+    max_output_tokens: int | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    repeat_penalty: float | None = None
+    seed: int | None = None
+    custom_persona: str | None = Field(default=None, max_length=2000)
 
 class BranchRequest(BaseModel):
     message_id: int = Field(gt=0)
@@ -52,6 +58,33 @@ def get_chat_session(session_id: str, chat_service: ChatService = Depends(get_ch
     if not session:
         raise HTTPException(status_code=404, detail="Chat session not found")
     return session
+
+class RenameRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+@router.put("/chat/sessions/{session_id}/rename")
+def rename_chat_session(session_id: str, req: RenameRequest, chat_service: ChatService = Depends(get_chat_service)):
+    if not chat_service.rename_session(session_id, req.title):
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    return {"renamed": True, "session_id": session_id, "title": req.title}
+
+class PinRequest(BaseModel):
+    pinned: bool | None = None
+    is_pinned: bool | int | None = None
+
+    def get_pinned(self) -> bool:
+        if self.pinned is not None:
+            return bool(self.pinned)
+        if self.is_pinned is not None:
+            return bool(self.is_pinned)
+        return True
+
+@router.put("/chat/sessions/{session_id}/pin")
+def pin_chat_session(session_id: str, req: PinRequest, chat_service: ChatService = Depends(get_chat_service)):
+    pinned_val = req.get_pinned()
+    if not chat_service.pin_session(session_id, pinned_val):
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    return {"pinned": pinned_val, "session_id": session_id}
 
 @router.delete("/chat/sessions/{session_id}")
 def delete_chat_session(session_id: str, chat_service: ChatService = Depends(get_chat_service)):
@@ -81,6 +114,15 @@ def chat(req: ChatRequest, chat_service: ChatService = Depends(get_chat_service)
             chart_interval=req.chart_interval,
             chart_mode=req.chart_mode,
             chart_view=req.chart_view,
+            web_crawl=req.web_crawl,
+            model=req.model,
+            temperature=req.temperature,
+            max_output_tokens=req.max_output_tokens,
+            top_p=req.top_p,
+            top_k=req.top_k,
+            repeat_penalty=req.repeat_penalty,
+            seed=req.seed,
+            custom_persona=req.custom_persona,
         )
     except ValueError as e:
         if "outside the upload directory" in str(e) or "Use a stored dataset ID" in str(e):
@@ -94,6 +136,7 @@ def chat(req: ChatRequest, chat_service: ChatService = Depends(get_chat_service)
         
     return {
         "session_id": result["session_id"],
+        "title": result.get("title"),
         "user_message_id": result.get("user_message_id"),
         "assistant_message_id": result.get("assistant_message_id"),
         "answer": result["answer"],
@@ -135,9 +178,19 @@ async def stream_chat(req: ChatRequest):
                     chart_mode=req.chart_mode,
                     chart_view=req.chart_view,
                     token_callback=lambda token: emit("token", {"text": token}),
+                    web_crawl=req.web_crawl,
+                    model=req.model,
+                    temperature=req.temperature,
+                    max_output_tokens=req.max_output_tokens,
+                    top_p=req.top_p,
+                    top_k=req.top_k,
+                    repeat_penalty=req.repeat_penalty,
+                    seed=req.seed,
+                    custom_persona=req.custom_persona,
                 )
             emit("done", {
                 "session_id": result["session_id"],
+                "title": result.get("title"),
                 "user_message_id": result.get("user_message_id"),
                 "assistant_message_id": result.get("assistant_message_id"),
                 "answer": result["answer"],
@@ -165,16 +218,20 @@ async def stream_chat(req: ChatRequest):
     worker = asyncio.create_task(asyncio.to_thread(run_chat))
 
     async def event_stream():
-        while True:
-            try:
-                event, payload = await asyncio.wait_for(events.get(), timeout=15)
-            except asyncio.TimeoutError:
-                yield ": processing\n\n"
-                continue
-            if event == "complete":
-                break
-            yield f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}\n\n"
-        await worker
+        try:
+            while True:
+                try:
+                    event, payload = await asyncio.wait_for(events.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    yield ": processing\n\n"
+                    continue
+                if event == "complete":
+                    break
+                yield f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}\n\n"
+            await worker
+        except (asyncio.CancelledError, GeneratorExit):
+            worker.cancel()
+            raise
 
     return StreamingResponse(
         event_stream(),

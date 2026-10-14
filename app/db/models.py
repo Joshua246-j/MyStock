@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON, UniqueConstraint, Table, ForeignKey
 from app.db.database import Base
 import datetime
 
@@ -17,6 +17,8 @@ class ChatSession(Base):
     branch_from_message_id = Column(Integer, nullable=True)
     document_ids = Column(JSON, nullable=False, default=list)
     dataset_id = Column(Integer, nullable=True)
+    title = Column(String(200), nullable=True)
+    is_pinned = Column(Integer, default=0, nullable=False)
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
@@ -66,17 +68,25 @@ class FundamentalMetric(Base):
     symbol = Column(String, nullable=False, index=True)
     metric = Column(String, nullable=False)
     value = Column(Float, nullable=False)
+    units = Column(String, nullable=True)
+    currency = Column(String, nullable=True)
+    fiscal_period = Column(String, nullable=True)
     period = Column(String, nullable=False, default="latest")
     source = Column(String, nullable=False)
     retrieved_at = Column(DateTime, nullable=False, default=utcnow_naive)
     data_status = Column(String, nullable=False, default="UNVERIFIED_FRESHNESS")
 
+news_article_tickers = Table(
+    "news_article_tickers",
+    Base.metadata,
+    Column("article_id", Integer, ForeignKey("news_articles.id", ondelete="CASCADE"), primary_key=True),
+    Column("ticker", String, primary_key=True, index=True)
+)
+
 class NewsArticle(Base):
     __tablename__ = "news_articles"
 
     id = Column(Integer, primary_key=True, index=True)
-    symbol = Column(String, nullable=False, index=True)
-    ticker = Column(String, nullable=False, index=True)
     title = Column(String, nullable=False)
     publisher = Column(String, nullable=True)
     related_tickers = Column(JSON, nullable=False, default=list)
@@ -105,3 +115,32 @@ class UserSettings(Base):
     id = Column(Integer, primary_key=True, index=True)
     settings = Column(JSON, default=dict)
     updated_at = Column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
+
+
+class ForecastRecord(Base):
+    __tablename__ = "forecast_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String, nullable=False, index=True)
+    horizon = Column(Integer, nullable=False)
+    model_name = Column(String, nullable=False)
+    reference_price = Column(Float, nullable=False)
+    reference_date = Column(String, nullable=False)
+    target_date = Column(String, nullable=False)
+    expected_price = Column(Float, nullable=False)
+    expected_return_percent = Column(Float, nullable=False)
+    lower_bound_price = Column(Float, nullable=False)
+    upper_bound_price = Column(Float, nullable=False)
+    confidence_percent = Column(Integer, nullable=False, default=80)
+    directional_prob = Column(Float, nullable=True)
+    directional_label = Column(String, nullable=True)
+    val_mae_percent = Column(Float, nullable=True)
+    val_rmse_percent = Column(Float, nullable=True)
+    val_sample_size = Column(Integer, nullable=True)
+    status = Column(String, nullable=False, default="pending")  # pending, evaluated, abstain
+    realized_price = Column(Float, nullable=True)
+    realized_error = Column(Float, nullable=True)
+    realized_error_percent = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=utcnow_naive)
+    metadata_json = Column(JSON, nullable=False, default=dict)
+

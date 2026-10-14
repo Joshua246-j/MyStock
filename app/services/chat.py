@@ -13,6 +13,69 @@ from sqlalchemy import func
 
 logger = logging.getLogger("stockrag.chat_service")
 
+
+def generate_conversation_title(message: str, symbol: str | None = None) -> str:
+    """Generate a clean, high-signal, logical conversation title based on context."""
+    if not message or not message.strip():
+        return f"{symbol} Analysis" if symbol else "New Conversation"
+    raw = message.strip()
+    clean = re.sub(r"[?!.,;:\'\"]+", " ", raw)
+    clean = " ".join(clean.split())
+    
+    tickers = re.findall(r"\b[A-Z]{2,5}(?:\.NS)?\b", raw)
+    if not tickers and symbol:
+        tickers = [symbol]
+    
+    if len(tickers) >= 2:
+        return f"{tickers[0]} vs {tickers[1]} Comparison"
+    
+    t = tickers[0] if tickers else symbol
+    low = raw.lower()
+    
+    if "sharpe ratio" in low:
+        return "Sharpe Ratio in Python" if "python" in low else "Sharpe Ratio Analysis"
+    if "maximum drawdown" in low or "max drawdown" in low:
+        return "Maximum Drawdown Calculation"
+    if "dividend" in low:
+        return f"{t} Dividend Analysis" if t else "Dividend Yield & Valuation"
+    if "porter" in low and "force" in low:
+        return "Porter's Five Forces"
+    if "swot" in low:
+        return f"{t} SWOT Analysis" if t else "SWOT Strategic Analysis"
+    if "dcf" in low or "discounted cash flow" in low:
+        return f"{t} DCF Valuation" if t else "DCF Valuation Model"
+    
+    if t:
+        if any(w in low for w in ["news", "headline", "article"]):
+            return f"{t} Market News"
+        if any(w in low for w in ["technical", "rsi", "macd", "indicator", "moving average", "chart", "trend"]):
+            return f"{t} Technical Analysis"
+        if any(w in low for w in ["fundamental", "earnings", "revenue", "p/e", "pe ratio", "balance sheet", "financial"]):
+            return f"{t} Fundamentals & Valuation"
+        if any(w in low for w in ["analyze", "analysis", "overview", "outlook"]):
+            return f"{t} Market Overview"
+            
+    subj = re.sub(
+        r"^(?:can\s+you\s+|could\s+you\s+|please\s+|tell\s+me\s+about\s+|tell\s+me\s+|show\s+me\s+|explain\s+how\s+|explain\s+what\s+|explain\s+|give\s+me\s+|what\s+is\s+the\s+difference\s+between\s+|what\s+is\s+the\s+|what\s+are\s+the\s+|what\s+is\s+|what\s+are\s+|how\s+does\s+|how\s+do\s+|how\s+to\s+|write\s+a\s+|calculate\s+|find\s+)",
+        "",
+        clean,
+        flags=re.IGNORECASE
+    ).strip()
+    words = [w for w in subj.split() if w.lower() not in {"a", "an", "the", "for", "to", "in", "of", "and", "with", "on", "all", "is", "are"}]
+    if not words:
+        words = clean.split()
+    top_words = words[:4]
+    
+    formatted = []
+    for w in top_words:
+        if w.isupper() and len(w) <= 6:
+            formatted.append(w)
+        else:
+            formatted.append(w.capitalize())
+    title = " ".join(formatted).strip()
+    return title[:42] or (f"{t} Research" if t else "Discussion")
+
+
 class ChatService:
     def __init__(self, db: Session):
         self.db = db
@@ -32,16 +95,26 @@ class ChatService:
             "branch_from_message_id": session.branch_from_message_id,
             "document_ids": session.document_ids or [],
             "dataset_id": session.dataset_id,
+            "is_pinned": bool(getattr(session, "is_pinned", 0)),
+            "title": session.title,
             "messages": [{"id": row.id, "role": row.role, "content": row.content, "created_at": row.created_at.isoformat(), "sources": row.sources or [], "metadata": row.metadata_json or {}} for row in messages],
         }
 
     def list_sessions(self, limit: int = 50):
-        """Return recent saved conversations with a title and a short preview."""
+        """Return recent saved conversations with a title, pin status, and a short preview."""
         rows = (
-            self.db.query(ChatSession.session_id, ChatSession.created_at, ChatSession.parent_session_id, func.max(ChatMessage.created_at).label("updated_at"), func.count(ChatMessage.id).label("message_count"))
+            self.db.query(
+                ChatSession.session_id,
+                ChatSession.created_at,
+                ChatSession.parent_session_id,
+                ChatSession.title,
+                ChatSession.is_pinned,
+                func.max(ChatMessage.created_at).label("updated_at"),
+                func.count(ChatMessage.id).label("message_count")
+            )
             .join(ChatMessage, ChatMessage.session_id == ChatSession.session_id)
-            .group_by(ChatSession.id, ChatSession.session_id, ChatSession.created_at, ChatSession.parent_session_id)
-            .order_by(func.max(ChatMessage.created_at).desc(), ChatSession.id.desc())
+            .group_by(ChatSession.id, ChatSession.session_id, ChatSession.created_at, ChatSession.parent_session_id, ChatSession.title, ChatSession.is_pinned)
+            .order_by(ChatSession.is_pinned.desc(), func.max(ChatMessage.created_at).desc(), ChatSession.id.desc())
             .limit(max(1, min(int(limit), 100)))
             .all()
         )
@@ -55,12 +128,21 @@ class ChatService:
             "session_id": row.session_id,
             "parent_session_id": row.parent_session_id,
             "is_branch": bool(row.parent_session_id),
-            "title": (first_user.get(row.session_id) or "New conversation").strip()[:80],
+            "is_pinned": bool(getattr(row, "is_pinned", 0)),
+            "title": row.title or (first_user.get(row.session_id) or "New conversation").strip()[:80],
             "preview": (first_user.get(row.session_id) or "No user message").strip()[:120],
             "message_count": int(row.message_count),
             "created_at": row.created_at.isoformat() if row.created_at else None,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         } for row in rows]
+
+    def pin_session(self, session_id: str, pinned: bool = True) -> bool:
+        session = self.db.query(ChatSession).filter(ChatSession.session_id == session_id).first()
+        if not session:
+            return False
+        session.is_pinned = 1 if pinned else 0
+        self.db.commit()
+        return True
 
     def branch_session(self, session_id: str, message_id: int) -> dict:
         source_session = self.db.query(ChatSession).filter(ChatSession.session_id == session_id).first()
@@ -77,12 +159,14 @@ class ChatService:
             raise ValueError("A failed response cannot be used as a branch point")
 
         branch_id = str(uuid.uuid4())
+        branch_title = f"Branch · {source_session.title or 'Chat'}"[:200]
         branch = ChatSession(
             session_id=branch_id,
             parent_session_id=session_id,
             branch_from_message_id=anchor.id,
             document_ids=source_session.document_ids or [],
             dataset_id=source_session.dataset_id,
+            title=branch_title,
         )
         self.db.add(branch)
         self.db.flush()
@@ -101,6 +185,17 @@ class ChatService:
         self.db.commit()
         return {"session_id": branch_id, "parent_session_id": session_id, "branch_from_message_id": anchor.id}
 
+    def rename_session(self, session_id: str, title: str) -> bool:
+        session = self.db.query(ChatSession).filter(ChatSession.session_id == session_id).first()
+        if not session:
+            return False
+        clean_title = (title or "").strip()[:200]
+        if not clean_title:
+            return False
+        session.title = clean_title
+        self.db.commit()
+        return True
+
     def delete_session(self, session_id: str) -> bool:
         session = self.db.query(ChatSession).filter(ChatSession.session_id == session_id).first()
         if not session:
@@ -116,9 +211,23 @@ class ChatService:
         self.db.commit()
         return True
 
-    def chat(self, message: str, dataset_id: int | None, dataset_path: str | None, symbol: str | None, session_id: str | None, mode: Literal["auto", "market", "documents", "general"] | None, document_ids: list[int] | None, chart_period: str | None = None, chart_interval: str | None = None, chart_mode: str | None = None, chart_view: str | None = None, token_callback=None):
-        settings = self._get_settings()
-        ai_model = settings.get("ai_model", OLLAMA_MODEL)
+    def chat(self, message: str, dataset_id: int | None, dataset_path: str | None, symbol: str | None, session_id: str | None, mode: Literal["auto", "market", "documents", "general"] | None, document_ids: list[int] | None, chart_period: str | None = None, chart_interval: str | None = None, chart_mode: str | None = None, chart_view: str | None = None, token_callback=None, web_crawl: bool | None = None, model: str | None = None, temperature: float | None = None, max_output_tokens: int | None = None, top_p: float | None = None, top_k: int | None = None, repeat_penalty: float | None = None, seed: int | None = None, custom_persona: str | None = None):
+        settings = dict(self._get_settings())
+        ai_model = (model.strip() if model and model.strip() else None) or settings.get("ai_model", OLLAMA_MODEL)
+        if temperature is not None:
+            settings["temperature"] = max(0.0, min(float(temperature), 2.0))
+        if max_output_tokens is not None:
+            settings["max_output_tokens"] = max(16, min(int(max_output_tokens), 16384))
+        if top_p is not None:
+            settings["top_p"] = max(0.01, min(float(top_p), 1.0))
+        if top_k is not None:
+            settings["top_k"] = max(0, min(int(top_k), 1000))
+        if repeat_penalty is not None:
+            settings["repeat_penalty"] = max(0.0, min(float(repeat_penalty), 5.0))
+        if seed is not None:
+            settings["seed"] = max(0, min(int(seed), 2147483647))
+        if custom_persona is not None:
+            settings["custom_persona"] = custom_persona.strip()[:2000]
         
         selected_document_ids = []
         if document_ids:
@@ -153,6 +262,8 @@ class ChatService:
             self.db.commit()
         session.document_ids = selected_document_ids
         session.dataset_id = dataset_id
+        if (not session.title or session.title.strip().lower() in {"new conversation", "new chat"}) and message:
+            session.title = generate_conversation_title(message, symbol)
         self.db.commit()
 
         history_records = self.db.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc()).limit(15).all()
@@ -184,6 +295,7 @@ class ChatService:
                 chart_mode=chart_mode,
                 chart_view=chart_view,
                 on_token=token_callback,
+                web_crawl=web_crawl,
             ))
         except OllamaError as exc:
             logger.warning("chat_generation_unavailable", extra={"session_id": session_id, "error_code": exc.code, "reason": str(exc)})
@@ -216,6 +328,7 @@ class ChatService:
         self.db.add(asst_msg)
         self.db.commit()
         result["session_id"] = session_id
+        result["title"] = session.title or "New conversation"
         result["user_message_id"] = user_message_id
         result["assistant_message_id"] = asst_msg.id
         return result

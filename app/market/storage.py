@@ -131,10 +131,14 @@ def normalize_news_items(items: list[dict], limit: int = 50) -> list[dict]:
             image_url = urlparse(image)
             item["image"] = image if image_url.scheme == "https" and image_url.hostname and not image_url.username and not image_url.password else None
         related = item.get("related_tickers")
+        item_ticker = str(item.get("ticker") or item.get("symbol") or "").strip().upper()
         if isinstance(related, (list, tuple, set)):
-            item["related_tickers"] = sorted({str(value).strip().upper() for value in related if str(value).strip()})
+            related_set = {str(value).strip().upper() for value in related if str(value).strip()}
         else:
-            item["related_tickers"] = []
+            related_set = set()
+        if item_ticker:
+            related_set.add(item_ticker)
+        item["related_tickers"] = sorted(related_set)
         key = url.split("#", 1)[0]
         existing = by_url.get(key)
         if existing is None or (existing[0] is None and published is not None):
@@ -198,7 +202,7 @@ def store_news(symbol: str, news: list[dict]) -> int:
         digest = sha256(f"{ticker}|{url}|{title}|{published.isoformat() if published else ''}".encode("utf-8")).hexdigest()
         related = item.get("related_tickers")
         related_tickers = sorted({str(value).strip().upper() for value in related if str(value).strip()}) if isinstance(related, (list, tuple, set)) else []
-        values_by_url[url] = {"symbol": symbol, "ticker": ticker, "title": title[:1000],
+        values_by_url[url] = {"title": title[:1000],
                               "publisher": str(item.get("publisher") or "")[:200] or None,
                               "related_tickers": related_tickers,
                               "summary": str(item.get("summary") or "")[:4000] or None,
@@ -211,30 +215,42 @@ def store_news(symbol: str, news: list[dict]) -> int:
     statement = insert(table).values(values)
     statement = statement.on_conflict_do_update(
         index_elements=[table.c.url],
-        set_={"symbol": statement.excluded.symbol, "ticker": statement.excluded.ticker,
-              "title": statement.excluded.title, "publisher": statement.excluded.publisher,
+        set_={"title": statement.excluded.title, "publisher": statement.excluded.publisher,
               "related_tickers": statement.excluded.related_tickers,
               "summary": statement.excluded.summary, "image": statement.excluded.image,
               "published_at": statement.excluded.published_at, "retrieved_at": statement.excluded.retrieved_at,
               "content_hash": statement.excluded.content_hash},
-    )
+    ).returning(table.c.id, table.c.url)
     with engine.begin() as connection:
-        connection.execute(statement)
+        result = connection.execute(statement).mappings().all()
+        assoc_values = []
+        for row in result:
+            article_id = row['id']
+            url = row['url']
+            for t in values_by_url[url]["related_tickers"]:
+                assoc_values.append({"article_id": article_id, "ticker": t})
+        if assoc_values:
+            from app.db.models import news_article_tickers
+            assoc_statement = insert(news_article_tickers).values(assoc_values).on_conflict_do_nothing()
+            connection.execute(assoc_statement)
     return len(values)
 
 
 def read_news(symbol: str, limit: int = 20) -> list[dict]:
-    with SessionLocal() as db:
-        rows = db.query(NewsArticle).filter(NewsArticle.symbol == symbol)
-        rows = rows.order_by(NewsArticle.published_at.desc(), NewsArticle.retrieved_at.desc()).all()
     normalized_symbol = symbol.strip().upper()
+    with SessionLocal() as db:
+        from app.db.models import news_article_tickers
+        rows = db.query(NewsArticle).join(
+            news_article_tickers, NewsArticle.id == news_article_tickers.c.article_id
+        ).filter(
+            news_article_tickers.c.ticker == normalized_symbol
+        ).order_by(NewsArticle.published_at.desc(), NewsArticle.retrieved_at.desc()).all()
     verified_rows = [row for row in rows
-                     if normalized_symbol in {str(value).strip().upper() for value in (row.related_tickers or [])}
-                     and (row.publisher or "").casefold() != "finviz source"]
+                     if (row.publisher or "").casefold() != "finviz source"]
     return [{"title": row.title, "url": row.url, "publisher": row.publisher,
              "related_tickers": row.related_tickers or [],
              "summary": row.summary, "image": row.image,
              "published_at": row.published_at.isoformat() if row.published_at else None,
-             "retrieved_at": row.retrieved_at.isoformat(), "ticker": row.ticker,
+             "retrieved_at": row.retrieved_at.isoformat(), "ticker": normalized_symbol,
              "content_hash": row.content_hash, "sentiment": row.sentiment,
              "sentiment_score": row.sentiment_score} for row in verified_rows[:max(1, min(int(limit), 100))]]

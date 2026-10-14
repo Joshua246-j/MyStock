@@ -167,8 +167,8 @@ class MarketDataService:
     def get_quote(self, symbol: str, refresh: bool = False) -> Dict[str, Any]:
         return self._get_with_cache("quote", symbol, "get_quote", force_refresh=refresh)
 
-    def get_history(self, symbol: str, period: str = "1mo", interval: str = "1d", refresh: bool = False) -> Dict[str, Any]:
-        result = self._get_with_cache("history", symbol, "get_history", force_refresh=refresh, period=period, interval=interval)
+    def get_history(self, symbol: str, period: str = "1mo", interval: str = "1d", refresh: bool = False, auto_adjust: bool = True) -> Dict[str, Any]:
+        result = self._get_with_cache("history", symbol, "get_history", force_refresh=refresh, period=period, interval=interval, auto_adjust=auto_adjust)
         if isinstance(result, dict) and result.get("success") and result.get("data"):
             result["indicators"] = calculate_indicator_series(pd.DataFrame(result["data"]))
         return result
@@ -222,7 +222,19 @@ class MarketDataService:
                 except Exception as exc:
                     logger.warning("market_news_fallback_failed", extra={"provider": type(fb_provider).__name__, "reason": str(exc)})
                     news = []
-        
+
+        if not news and getattr(self, "enable_rss_fallback", True):
+            provider_mod = getattr(self.provider, "__module__", "")
+            if provider_mod.startswith("app.market"):
+                try:
+                    from app.market.news_providers import fetch_ticker_targeted_news
+                    targeted_news = fetch_ticker_targeted_news(resolved_symbol, limit=25)
+                    if targeted_news:
+                        news = targeted_news
+                        source = "MultiSourceRSS"
+                except Exception as exc:
+                    logger.info("market_news_targeted_rss_failed", extra={"symbol": resolved_symbol, "reason": str(exc)})
+
         try:
             from app.market.storage import normalize_news_items
             news = normalize_news_items(news)
@@ -246,8 +258,8 @@ class MarketDataService:
             logger.exception("stored_news_read_failed", extra={"symbol": resolved_symbol})
         return {"success": False, "news": [], "source": source, "data_status": "UNAVAILABLE", "error": "No news was returned by the configured providers."}
 
-    def get_technical_analysis(self, symbol: str, period: str = "6mo", interval: str = "1d", refresh: bool = False) -> Dict[str, Any]:
-        history = self.get_history(symbol, period=period, interval=interval, refresh=refresh)
+    def get_technical_analysis(self, symbol: str, period: str = "6mo", interval: str = "1d", refresh: bool = False, auto_adjust: bool = True) -> Dict[str, Any]:
+        history = self.get_history(symbol, period=period, interval=interval, refresh=refresh, auto_adjust=auto_adjust)
         if not history.get("success") or not history.get("data"):
             return {"success": False, "error": "Insufficient history for technical analysis"}
         
@@ -260,7 +272,7 @@ class MarketDataService:
             # Keep visible-window indicators tied to the chart, while giving
             # the time-ordered model enough same-interval bars to evaluate.
             model_period = {"1d": "1y", "1wk": "2y", "1mo": "5y"}.get(interval, "1y")
-            model_history = self.get_history(symbol, period=model_period, interval=interval, refresh=refresh)
+            model_history = self.get_history(symbol, period=model_period, interval=interval, refresh=refresh, auto_adjust=auto_adjust)
             model_rows = model_history.get("data") if model_history.get("success") else None
             if model_rows:
                 model_result = calculate_technical_indicators(pd.DataFrame(model_rows), interval=interval)
@@ -282,18 +294,5 @@ class MarketDataService:
         return result
 
     def check_provider(self, symbol: str = "AAPL") -> Dict[str, Any]:
-        """Perform an uncached provider check for the live health endpoint."""
-        try:
-            primary = self.provider.get_quote(symbol)
-        except Exception as exc:
-            primary = {"success": False, "error": str(exc)}
-        if isinstance(primary, dict) and primary.get("success"):
-            return primary
-        for fb_provider in self.fallback_providers:
-            try:
-                fallback = fb_provider.get_quote(symbol)
-            except Exception as exc:
-                continue
-            if isinstance(fallback, dict) and fallback.get("success"):
-                return fallback
-        return {"success": False, "error": "No market data provider is reachable"}
+        """Perform a provider check for the live health endpoint using the cache to prevent rate limits."""
+        return self._get_with_cache("market_health", symbol, "get_quote", force_refresh=False)

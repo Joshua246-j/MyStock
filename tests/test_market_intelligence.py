@@ -67,7 +67,7 @@ def test_market_analysis_keeps_chart_metrics_visible_window_and_extends_only_ml_
     service = MarketDataService(provider=object(), fallback_providers=[], cache=object(), settings_provider=lambda: {})
     requests = []
 
-    def history(_symbol, period, interval, refresh=False):
+    def history(_symbol, period, interval, refresh=False, **kwargs):
         requests.append((period, interval))
         count = 23 if period == "1mo" else 150
         close = 100 * np.exp(np.cumsum(np.random.default_rng(count).normal(0.0002, 0.01, count)))

@@ -4,7 +4,7 @@ import json
 import re
 from hashlib import sha256
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.config import UPLOAD_DIR
@@ -105,10 +105,36 @@ def list_documents(db: Session = Depends(get_db)):
     records = db.query(DocumentMetadata).order_by(DocumentMetadata.uploaded_at.desc()).all()
     return {"documents": [{"id": row.id, "filename": row.filename, "type": row.document_type, "status": row.status, "uploaded_at": row.uploaded_at.isoformat(), "metadata": row.metadata_json or {}} for row in records]}
 
+@router.delete("/documents/{document_id}")
+def delete_document(document_id: int, db: Session = Depends(get_db)):
+    record = db.query(DocumentMetadata).filter(DocumentMetadata.id == document_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if record.storage_path:
+        try:
+            path = Path(record.storage_path)
+            if path.exists():
+                path.unlink()
+        except Exception:
+            pass
+    # Clean up associated lexical chunks and vector embeddings
+    from app.rag.lexical_store import delete_document_chunks
+    try:
+        delete_document_chunks(document_id)
+    except Exception:
+        pass
+    db.delete(record)
+    db.commit()
+    return {"message": "Document deleted successfully"}
+
 
 @router.post("/upload/pdf")
 @router.post("/upload/document")
-async def upload_document(file: UploadFile = File(...), metadata_json: str | None = Form(None)):
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...), 
+    metadata_json: str | None = Form(None)
+):
     extension = Path(file.filename or "").suffix.lower()
     formats = {".pdf": "pdf", ".txt": "txt", ".html": "html", ".htm": "html", ".docx": "docx"}
     document_format = formats.get(extension)
@@ -126,31 +152,37 @@ async def upload_document(file: UploadFile = File(...), metadata_json: str | Non
         await asyncio.to_thread(file_path.unlink, missing_ok=True)
         return {"message": "This exact document is already indexed.", "document_id": duplicate_id, "duplicate": True}
     document_id = await asyncio.to_thread(_create_document_record, original_name, document_format, str(file_path.resolve()), metadata)
-    loader = PDFLoader() if document_format == "pdf" else HTMLLoader() if document_format == "html" else WordLoader() if document_format == "docx" else TextLoader()
-    result = await asyncio.to_thread(ingest_document, loader, str(file_path), original_name, document_id, None, metadata)
-    await asyncio.to_thread(_set_document_status, document_id, "completed" if result.get("success") else "failed")
-    if not result.get("success"):
-        raise HTTPException(status_code=422, detail=result.get("error", "Document indexing failed"))
-        
-    return {"message": "Document uploaded and indexed successfully", "document_id": document_id, "details": result}
+    
+    def process_document():
+        loader = PDFLoader() if document_format == "pdf" else HTMLLoader() if document_format == "html" else WordLoader() if document_format == "docx" else TextLoader()
+        result = ingest_document(loader, str(file_path), original_name, document_id, None, metadata)
+        _set_document_status(document_id, "completed" if result.get("success") else "failed")
+
+    background_tasks.add_task(asyncio.to_thread, process_document)
+    return {"message": "Document processing started", "document_id": document_id, "status": "processing"}
 
 @router.post("/upload/dataset")
-async def upload_dataset(file: UploadFile = File(...), metadata_json: str | None = Form(None)):
+async def upload_dataset(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...), 
+    metadata_json: str | None = Form(None)
+):
     if not (file.filename or "").lower().endswith(('.csv', '.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only CSV or Excel files are allowed")
     file_path, original_name = await _store_upload(file)
     metadata = _parse_upload_metadata(metadata_json, "dataset", original_name)
     metadata["content_hash"] = sha256(await asyncio.to_thread(file_path.read_bytes)).hexdigest()
     document_id = await asyncio.to_thread(_create_document_record, original_name, "dataset", str(file_path.resolve()), metadata)
-    result = await asyncio.to_thread(analyze_dataset, str(file_path), "")
-    await asyncio.to_thread(_set_document_status, document_id, "completed" if result.get("success") else "failed")
-    if not result.get("success"):
-        raise HTTPException(status_code=400, detail=f"Invalid dataset: {result.get('error')}")
-        
-    return {"message": "Dataset uploaded successfully", "document_id": document_id, "columns": result.get("columns")}
+    
+    def process_dataset():
+        result = analyze_dataset(str(file_path), "")
+        _set_document_status(document_id, "completed" if result.get("success") else "failed")
+
+    background_tasks.add_task(asyncio.to_thread, process_dataset)
+    return {"message": "Dataset processing started", "document_id": document_id, "status": "processing"}
 
 @router.post("/crawl")
-async def crawl_web(req: CrawlRequest):
+async def crawl_web(req: CrawlRequest, background_tasks: BackgroundTasks):
     if not req.url.startswith(('http://', 'https://')):
         raise HTTPException(status_code=400, detail="Invalid URL. Must start with http:// or https://")
         
@@ -160,10 +192,13 @@ async def crawl_web(req: CrawlRequest):
     timeout = max(1, min(float(settings.get("request_timeout", 30)), 180))
     document_id = await asyncio.to_thread(_create_document_record, req.url, "web", None, {"source_type": "web", "source_url": req.url, "title": req.url})
     hints = {"ticker": req.ticker.upper()} if req.ticker else None
-    result = await asyncio.to_thread(crawl_url, req.url, timeout, document_id, hints)
-    if not result.get("success"):
-        await asyncio.to_thread(_set_document_status, document_id, "failed")
-        raise HTTPException(status_code=422, detail=result.get("error"))
-    await asyncio.to_thread(_set_document_status, document_id, "completed", result.get("title"), result.get("metadata"))
-        
-    return {"message": "URL crawled and indexed successfully", "title": result.get("title"), "document_id": document_id}
+    
+    def process_crawl():
+        result = crawl_url(req.url, timeout, document_id, hints)
+        if not result.get("success"):
+            _set_document_status(document_id, "failed")
+        else:
+            _set_document_status(document_id, "completed", result.get("title"), result.get("metadata"))
+
+    background_tasks.add_task(asyncio.to_thread, process_crawl)
+    return {"message": "URL crawling started", "document_id": document_id, "status": "processing"}

@@ -1,5 +1,4 @@
 import httpx
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 from app.market.providers.base import MarketDataProvider
@@ -59,7 +58,7 @@ class FinnhubProvider(MarketDataProvider):
 
     def get_history(self, symbol: str, period: str = "1mo", interval: str = "1d") -> Dict[str, Any]:
         # Approximate period mapping to timestamp
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         if period == "1mo":
             start = now - timedelta(days=30)
         elif period == "3mo":

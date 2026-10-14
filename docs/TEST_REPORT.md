@@ -1,16 +1,36 @@
-# Test report
+# Test Report
 
-Date: 2026-10-10 (Asia/Kolkata)
+**Date:** 2026-10-14 (Asia/Kolkata)  
+**Status:** All Tests Passing  
+**Suite Run:** `.venv\Scripts\python.exe -m pytest tests/` — **86 passed, 0 failed in 10.18s**
 
-## Automated checks
+## 1. Automated Test Summary
 
-- `python -m pytest tests/ -q --basetemp .pytest-tmp-final4 -p no:cacheprovider` — **72 passed, 0 failed** (latest run on 2026-10-10, 3.63 seconds).
-- Python `compileall` for `app` and `tests` — passed.
-- `node --check static/app.js` — passed.
-- `python -m pip check` — passed.
-- `npm run build:css` — passed.
+| Test File | Tests | Status | Scope |
+|-----------|-------|--------|-------|
+| `tests/test_audit_improvements.py` | 12 | ✅ Passed | Greetings fast-path, invalid tickers, missing documents, settings schema/reset, parameters, persona limits, history isolation |
+| `tests/test_cache_concurrency.py` | 1 | ✅ Passed | Concurrent cache access and atomic upserts |
+| `tests/test_chat_branching.py` | 3 | ✅ Passed | Chat session branching and prefix message preservation |
+| `tests/test_chat_document_scopes.py` | 1 | ✅ Passed | Document scoping and retrieval isolation |
+| `tests/test_chat_streaming.py` | 1 | ✅ Passed | SSE token-by-token streaming and event sequencing |
+| `tests/test_crawler_security.py` | 7 | ✅ Passed | SSRF private IP blocking, domain allowlist, robots.txt |
+| `tests/test_dataset.py` | 1 | ✅ Passed | Dataset profiling, CSV analysis, schema extraction |
+| `tests/test_document_loaders.py` | 5 | ✅ Passed | PDF, DOCX, TXT, HTML ingestion and metadata extraction |
+| `tests/test_faiss_store.py` | 1 | ✅ Passed | FAISS vector store singleton and index stability |
+| `tests/test_market_intelligence.py` | 5 | ✅ Passed | Technical indicators, walk-forward models, metrics |
+| `tests/test_market_storage.py` | 12 | ✅ Passed | OHLCV bar normalization, SQLite cache, freshness labeling |
+| `tests/test_news_feed.py` | 2 | ✅ Passed | RSS news feed parsing and publisher deduplication |
+| `tests/test_news_provider.py` | 1 | ✅ Passed | News provider fallback and normalization |
+| `tests/test_pdf.py` | 1 | ✅ Passed | PDF extraction and page numbering |
+| `tests/test_production_features.py` | 30 | ✅ Passed | Extractive facts, grounding check, Ollama error handling |
+| `tests/test_rag.py` | 1 | ✅ Passed | Hybrid RAG retrieval (FAISS + FTS5 RRF fusion) |
+| `tests/test_rag_metadata.py` | 1 | ✅ Passed | Ticker & document type metadata filtering |
+| `tests/test_web_research_flow.py` | 1 | ✅ Passed | Natural language web research indexing & retrieval |
+| **Total** | **86** | **100% Passed** | **Zero failures / zero regressions** |
 
-Coverage includes routing, technical calculations, market fallback/storage, OHLCV validation, metadata extraction/filtering, FTS5/FAISS hybrid retrieval and degradation, PDF page/OCR handling, DOCX section/table extraction, TXT/HTML extraction, deterministic numeric evidence checks, robots exclusion, and untrusted-evidence prompt boundaries.
+---
+
+## 2. Regression & Production Verification Details
 
 ## Runtime and browser checks
 

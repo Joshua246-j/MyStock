@@ -48,14 +48,15 @@ async def get_quote(symbol: str, refresh: bool = Query(False)):
 
 
 @router.get("/{symbol}/history")
-async def get_history(symbol: str, period: str = Query("1mo", pattern="^(1mo|3mo|6mo|1y|2y|5y)$"), interval: str = Query("1d", pattern="^(1d|1wk|1mo)$"), refresh: bool = Query(False)):
-    result = await _market_call(market_service.get_history, get_resolved(symbol), period, interval, refresh=refresh)
+async def get_history(symbol: str, period: str = Query("1mo", pattern="^(1mo|3mo|6mo|1y|2y|5y)$"), interval: str = Query("1d", pattern="^(1d|1wk|1mo)$"), refresh: bool = Query(False), auto_adjust: bool = Query(True)):
+    result = await _market_call(market_service.get_history, get_resolved(symbol), period, interval, refresh=refresh, auto_adjust=auto_adjust)
     if not result.get("success"):
         raise HTTPException(status_code=503, detail=result.get("error", "Price history unavailable from configured providers"))
     return result
 
 
 @router.get("/{symbol}/fundamentals")
+@router.get("/{symbol}/financials")
 async def get_fundamentals(symbol: str, refresh: bool = Query(False)):
     result = await _market_call(market_service.get_financials, get_resolved(symbol), refresh=refresh)
     if not result.get("success"):
@@ -70,8 +71,8 @@ async def get_news(symbol: str, refresh: bool = Query(False)):
 
 
 @router.get("/{symbol}/technical")
-async def get_technical(symbol: str, period: str = Query("6mo", pattern="^(1mo|3mo|6mo|1y|2y|5y)$"), interval: str = Query("1d", pattern="^(1d|1wk|1mo)$"), refresh: bool = Query(False)):
-    result = await _market_call(market_service.get_technical_analysis, get_resolved(symbol), period=period, interval=interval, refresh=refresh)
+async def get_technical(symbol: str, period: str = Query("6mo", pattern="^(1mo|3mo|6mo|1y|2y|5y)$"), interval: str = Query("1d", pattern="^(1d|1wk|1mo)$"), refresh: bool = Query(False), auto_adjust: bool = Query(True)):
+    result = await _market_call(market_service.get_technical_analysis, get_resolved(symbol), period=period, interval=interval, refresh=refresh, auto_adjust=auto_adjust)
     if not result.get("success"):
         raise HTTPException(status_code=503, detail=result.get("error", "Technical analysis unavailable"))
     return result

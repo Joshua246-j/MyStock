@@ -64,6 +64,18 @@ def ingest_document(loader: DocumentLoader, file_path: str, filename: str, docum
         passage_metadata = passage.get("metadata") or {}
         supplied_metadata = document_metadata or {}
         metadata = {**passage_metadata, **supplied_metadata}
+        
+        # Unify ticker suffix handling with build_metadata_filter
+        for key in ["ticker", "symbol"]:
+            val = metadata.get(key)
+            if isinstance(val, str) and val.endswith((".NS", ".BO")):
+                metadata[key] = val.rsplit(".", 1)[0]
+        if isinstance(metadata.get("related_tickers"), list):
+            metadata["related_tickers"] = [
+                v.rsplit(".", 1)[0] if isinstance(v, str) and v.endswith((".NS", ".BO")) else v 
+                for v in metadata["related_tickers"]
+            ]
+            
         extracted_title = passage_metadata.get("title")
         if extracted_title and supplied_metadata.get("title") in (None, filename):
             metadata["title"] = extracted_title

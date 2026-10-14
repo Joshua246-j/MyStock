@@ -7,6 +7,7 @@ from app.market.news_feed import get_news_feed
 router = APIRouter(prefix="/news", tags=["News"])
 
 
+@router.get("")
 @router.get("/feed")
 async def get_feed(
     symbols: str = Query("AAPL,NVDA,MSFT,GOOGL,RELIANCE.NS,TCS.NS,HDFCBANK.NS,INFY.NS", max_length=1000),

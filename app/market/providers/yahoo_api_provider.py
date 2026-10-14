@@ -45,6 +45,27 @@ class YahooApiProvider(MarketDataProvider):
             change = price - prev_close if price and prev_close else 0
             change_percent = (change / prev_close * 100) if prev_close else 0
 
+            rmt = meta.get('regularMarketTime')
+            market_time_iso = datetime.fromtimestamp(rmt, timezone.utc).isoformat() if rmt else None
+            exchange_name = meta.get('exchangeName') or 'US'
+            tz_name = meta.get('timezone') or meta.get('exchangeTimezoneName') or 'UTC'
+
+            now_utc = datetime.now(timezone.utc)
+            is_market_open = False
+            tp = meta.get('currentTradingPeriod', {})
+            if isinstance(tp, dict):
+                reg = tp.get('regular', {})
+                if isinstance(reg, dict) and reg.get('start') and reg.get('end'):
+                    try:
+                        s_dt = datetime.fromtimestamp(reg['start'], timezone.utc)
+                        e_dt = datetime.fromtimestamp(reg['end'], timezone.utc)
+                        is_market_open = s_dt <= now_utc <= e_dt
+                    except Exception:
+                        pass
+
+            market_session = "REGULAR_MARKET_OPEN" if is_market_open else "MARKET_CLOSED"
+            data_status = "REALTIME_QUOTE" if is_market_open else "OFFICIAL_CLOSE"
+
             return {
                 "success": True,
                 "symbol": symbol,
@@ -52,11 +73,20 @@ class YahooApiProvider(MarketDataProvider):
                 "change": change,
                 "change_percent": change_percent,
                 "previous_close": prev_close,
+                "open": meta.get('regularMarketOpen'),
+                "day_high": meta.get('regularMarketDayHigh'),
+                "day_low": meta.get('regularMarketDayLow'),
                 "volume": meta.get('regularMarketVolume', 0),
                 "currency": meta.get('currency', 'USD'),
+                "exchange": exchange_name,
+                "exchange_timezone": tz_name,
+                "market_time": market_time_iso,
+                "market_session": market_session,
+                "retrieved_at": datetime.now().astimezone().isoformat(),
                 "timestamp": datetime.now().astimezone().isoformat(),
-                "data_status": "DELAYED_OR_UNVERIFIED",
-                "source": "yahooapi"
+                "data_status": data_status,
+                "status": data_status,
+                "source": f"Yahoo Finance ({exchange_name})"
             }
         except Exception as e:
             return {"success": False, "error": str(e), "source": "yahooapi"}

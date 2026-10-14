@@ -9,4 +9,5 @@ uploads/
 .pytest-tmp/
 *.ollama-*-pull.log
 node_modules/
-*.html
+.audit-run/
+data/*.db

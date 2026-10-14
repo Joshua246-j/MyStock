@@ -1,7 +1,6 @@
 """Bounded, deterministic profiling for user-selected tabular uploads."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pandas as pd

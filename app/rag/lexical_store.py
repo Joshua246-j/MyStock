@@ -168,3 +168,35 @@ def lexical_index_available() -> bool:
         return True
     except Exception:
         return False
+
+
+def clean_orphaned_chunks() -> int:
+    """Reconcile the rag_chunks FTS5 table with the main db and FAISS vector map."""
+    from app.db.database import SessionLocal
+    from app.db.models import DocumentMetadata
+
+    with SessionLocal() as db:
+        valid_docs = {str(row.id) for row in db.query(DocumentMetadata.id).all()}
+
+    ensure_lexical_index()
+    deleted_count = 0
+    with engine.begin() as conn:
+        all_docs = conn.execute(text("SELECT DISTINCT document_id FROM rag_chunks")).fetchall()
+        for (doc_id,) in all_docs:
+            if str(doc_id) not in valid_docs and str(doc_id) != "0":
+                conn.execute(text("DELETE FROM rag_vector_map WHERE chunk_rowid IN (SELECT rowid FROM rag_chunks WHERE document_id = :doc)"), {"doc": doc_id})
+                conn.execute(text("DELETE FROM rag_chunk_metadata WHERE chunk_rowid IN (SELECT rowid FROM rag_chunks WHERE document_id = :doc)"), {"doc": doc_id})
+                res = conn.execute(text("DELETE FROM rag_chunks WHERE document_id = :doc"), {"doc": doc_id})
+                deleted_count += (res.rowcount or 0)
+
+        res_map = conn.execute(text("DELETE FROM rag_vector_map WHERE chunk_rowid NOT IN (SELECT rowid FROM rag_chunks)"))
+        res_meta = conn.execute(text("DELETE FROM rag_chunk_metadata WHERE chunk_rowid NOT IN (SELECT rowid FROM rag_chunks)"))
+        deleted_count += (res_map.rowcount or 0) + (res_meta.rowcount or 0)
+
+    if deleted_count > 0:
+        from app.rag.vector_store import invalidate_vector_index, get_vector_store
+        invalidate_vector_index()
+        get_vector_store()
+
+    return deleted_count
+

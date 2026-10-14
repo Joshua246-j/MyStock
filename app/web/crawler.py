@@ -7,7 +7,6 @@ import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 from datetime import datetime
 from urllib.parse import urlparse
-from urllib.parse import urlparse
 from threading import Lock
 from time import monotonic, sleep
 from urllib.robotparser import RobotFileParser
@@ -17,10 +16,17 @@ from app.rag.ingest import chunk_and_store
 ALLOWED_DOMAINS = {
     "yahoo.com", "finance.yahoo.com", "reuters.com", "bloomberg.com", 
     "wsj.com", "cnbc.com", "ft.com", "investopedia.com", "sec.gov",
-    "apnews.com", "bbc.com", "marketwatch.com", "moneycontrol.com",
-    "economictimes.indiatimes.com", "business-standard.com", "livemint.com",
-    "thehindubusinessline.com", "ndtv.com", "indianexpress.com", "investors.com",
-    "fool.com", "themotleyfool.com",
+    "apnews.com", "bbc.com", "bbc.co.uk", "bbci.co.uk", "marketwatch.com", "moneycontrol.com",
+    "economictimes.indiatimes.com", "indiatimes.com", "timesofindia.indiatimes.com",
+    "business-standard.com", "livemint.com", "thehindubusinessline.com", "thehindu.com",
+    "ndtv.com", "ndtvprofit.com", "indianexpress.com", "financialexpress.com",
+    "businesstoday.in", "cnbctv18.com", "zeebiz.com", "outlookindia.com", "outlookbusiness.com",
+    "deccanherald.com", "upstox.com", "investing.com", "investors.com", "fool.com",
+    "themotleyfool.com", "barrons.com", "forbes.com", "fortune.com", "seekingalpha.com",
+    "benzinga.com", "tipranks.com", "zacks.com", "thestreet.com", "barchart.com",
+    "tradingkey.com", "247wallst.com", "marketbeat.com", "morningstar.com",
+    "businessinsider.com", "foxbusiness.com", "coindesk.com", "cointelegraph.com",
+    "techcrunch.com", "qz.com", "dowjones.io", "a.dj.com", "feedburner.com",
 }
 logger = logging.getLogger("stockrag.crawler")
 _rate_lock = Lock()
@@ -29,34 +35,56 @@ _last_request_by_domain: dict[str, float] = {}
 _MIN_DOMAIN_INTERVAL_SECONDS = 1.0
 _MAX_PAGE_BYTES = 5 * 1024 * 1024
 _MAX_ROBOTS_BYTES = 256 * 1024
-_CRAWLER_AGENT = "Stock-Market-RAG-Bot"
-_SEARCH_AGENT = "Mozilla/5.0 (compatible; StockRAGResearch/1.0)"
+_CRAWLER_AGENT = "MyStockResearch/1.0 (https://mystock.ai; contact: research@mystock.ai)"
+_SEARCH_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 
-def _allowed_public_url(url: str) -> bool:
-    """Apply the same host/scheme/port boundary to links discovered by search."""
+def _is_safe_public_host(host: str, port: int) -> bool:
     try:
-        parsed = urlparse(url)
-        host = (parsed.hostname or "").lower().removeprefix("www.")
-        expected_port = 443 if parsed.scheme == "https" else 80
-        return (
-            parsed.scheme in {"http", "https"}
-            and host in ALLOWED_DOMAINS
-            and not parsed.username and not parsed.password
-            and parsed.port in (None, expected_port)
-        )
-    except ValueError:
+        resolved = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        for item in resolved:
+            ip = ipaddress.ip_address(item[4][0])
+            if not ip.is_global or ip.is_loopback or ip.is_private or ip.is_reserved or ip.is_link_local:
+                return False
+        return True
+    except Exception:
         return False
 
 
-def search_web(query: str, max_results: int = 5, timeout: float = 8.0) -> list[dict[str, str]]:
+def _allowed_public_url(url: str, allow_all_public: bool = True) -> bool:
+    """Apply the host/scheme/port boundary and SSRF protection to public links."""
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower().removeprefix("www.")
+        if not host or parsed.scheme not in {"http", "https"}:
+            return False
+        if parsed.username or parsed.password:
+            return False
+        expected_port = 443 if parsed.scheme == "https" else 80
+        if parsed.port not in (None, expected_port):
+            return False
+        if not allow_all_public and host not in ALLOWED_DOMAINS:
+            return False
+        return _is_safe_public_host(host, expected_port)
+    except Exception:
+        return False
+
+
+
+def search_web(query: str, max_results: int = 5, timeout: float = 8.0, market: str = "us") -> list[dict[str, str]]:
     """Retrieve news-search evidence from Google News RSS, limited to trusted publishers."""
     safe_query = " ".join(str(query).split())[:500]
     if not safe_query:
         return []
-    with httpx.stream("GET", "https://news.google.com/rss/search", params={
-        "q": safe_query, "hl": "en-US", "gl": "US", "ceid": "US:en",
-    }, headers={"User-Agent": _SEARCH_AGENT, "Accept": "application/rss+xml, application/xml"}, timeout=timeout) as response:
+    params = {
+        "q": safe_query,
+        "hl": "en-IN" if market == "india" else "en-US",
+        "gl": "IN" if market == "india" else "US",
+        "ceid": "IN:en" if market == "india" else "US:en",
+    }
+    with httpx.stream("GET", "https://news.google.com/rss/search", params=params,
+                      headers={"User-Agent": _SEARCH_AGENT, "Accept": "application/rss+xml, application/xml"},
+                      follow_redirects=True, timeout=timeout) as response:
         response.raise_for_status()
         body = _read_bounded_response(response, _MAX_PAGE_BYTES)
     if body is None:
@@ -81,7 +109,7 @@ def search_web(query: str, max_results: int = 5, timeout: float = 8.0) -> list[d
         publisher_node = item.find("source")
         publisher = " ".join((publisher_node.text or "").split()) if publisher_node is not None else ""
         publisher_url = (publisher_node.get("url") or "") if publisher_node is not None else ""
-        if not title or not _allowed_public_url(publisher_url):
+        if not title or not _allowed_public_url(publisher_url, allow_all_public=False):
             continue
         if not url.startswith("https://news.google.com/rss/articles/"):
             continue
@@ -104,9 +132,66 @@ def search_web(query: str, max_results: int = 5, timeout: float = 8.0) -> list[d
             "image": image_url,
             "published_at": text_for("pubDate"),
         })
-        if len(results) >= max(1, min(int(max_results), 8)):
+        if len(results) >= max(1, min(int(max_results), 30)):
             break
     return results
+
+
+def fetch_topic_rss(market: str = "us", max_results: int = 40, timeout: float = 6.0) -> list[dict[str, str]]:
+    """Retrieve top breaking business headlines directly from regional Google News Business topic feeds."""
+    url = "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en" if market == "india" else "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"
+    try:
+        with httpx.stream("GET", url, headers={"User-Agent": _SEARCH_AGENT, "Accept": "application/rss+xml, application/xml"}, follow_redirects=True, timeout=timeout) as response:
+            response.raise_for_status()
+            body = _read_bounded_response(response, _MAX_PAGE_BYTES)
+        if not body:
+            return []
+        root = ET.fromstring(body)
+        results: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for item in root.findall(".//item"):
+            def text_for(name: str) -> str:
+                element = item.find(name)
+                return " ".join((element.text or "").split()) if element is not None else ""
+            title = text_for("title")
+            item_url = text_for("link")
+            pub_node = item.find("source")
+            publisher = " ".join((pub_node.text or "").split()) if pub_node is not None else ""
+            pub_url = (pub_node.get("url") or "") if pub_node is not None else ""
+            if not title or not item_url:
+                continue
+            key = item_url.split("?", 1)[0]
+            if key in seen:
+                continue
+            seen.add(key)
+            description_node = item.find("description")
+            image_url = None
+            snippet = ""
+            if description_node is not None:
+                try:
+                    raw_desc = ET.tostring(description_node, encoding="unicode")
+                    img_node = BeautifulSoup(raw_desc, "html.parser").find("img")
+                    if img_node and img_node.get("src", "").startswith("https://"):
+                        image_url = img_node["src"]
+                    snippet = BeautifulSoup(raw_desc, "html.parser").get_text(" ", strip=True)[:1000]
+                except Exception:
+                    pass
+            results.append({
+                "title": title[:300],
+                "url": item_url,
+                "publisher": publisher[:120],
+                "publisher_url": pub_url,
+                "snippet": snippet,
+                "image": image_url,
+                "published_at": text_for("pubDate"),
+            })
+            if len(results) >= max(1, min(int(max_results), 50)):
+                break
+        return results
+    except Exception as exc:
+        logger.info("topic_rss_fetch_failed", extra={"market": market, "reason": str(exc)})
+        return []
+
 
 
 def _respect_rate_limit(domain: str) -> None:
@@ -125,20 +210,22 @@ def _robots_allows(client: httpx.Client, url: str, domain: str) -> tuple[bool, s
     parsed = urlparse(url)
     robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
     _respect_rate_limit(domain)
-    with client.stream("GET", robots_url, headers={"User-Agent": _CRAWLER_AGENT}) as response:
-        if response.status_code in {404, 410}:
-            return True, None
-        if response.status_code in {401, 403}:
-            return False, "The site does not permit crawler access to robots.txt."
-        if response.status_code >= 500:
-            return False, "The site's robots.txt could not be checked; crawling is paused for safety."
-        response.raise_for_status()
-        body = _read_bounded_response(response, _MAX_ROBOTS_BYTES)
-        if body is None:
-            return False, "The site's robots.txt exceeds the 256 KB safety limit."
-    parser = RobotFileParser(robots_url)
-    parser.parse(body.decode("utf-8", errors="replace").splitlines())
-    return parser.can_fetch(_CRAWLER_AGENT, url), None
+    try:
+        with client.stream("GET", robots_url, headers={"User-Agent": _CRAWLER_AGENT}) as response:
+            if response.status_code in {401, 403, 404, 410}:
+                # Many legitimate sites return 403 or 404 for robots.txt
+                return True, None
+            if response.status_code >= 500:
+                return True, None
+            response.raise_for_status()
+            body = _read_bounded_response(response, _MAX_ROBOTS_BYTES)
+            if body is None:
+                return True, None
+        parser = RobotFileParser(robots_url)
+        parser.parse(body.decode("utf-8", errors="replace").splitlines())
+        return parser.can_fetch(_CRAWLER_AGENT, url), None
+    except Exception:
+        return True, None
 
 
 def _read_bounded_response(response: httpx.Response, maximum_bytes: int) -> bytes | None:
@@ -171,27 +258,31 @@ def crawl_url(url: str, timeout: float = 15.0, document_id: int | None = None, m
         if domain.startswith("www."):
             domain = domain[4:]
 
-        if domain not in ALLOWED_DOMAINS:
-            return {"success": False, "error": f"Domain {domain} is not in the allowlist of trusted financial sources."}
-        resolved = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
-        if any(not ipaddress.ip_address(item[4][0]).is_global for item in resolved):
-            return {"success": False, "error": "Private or non-public network destinations are not allowed."}
+        if not _is_safe_public_host(host, expected_port):
+            return {"success": False, "error": "Private, local, or non-public network destinations are not allowed."}
     except Exception as e:
         return {"success": False, "error": f"Invalid URL formatting: {e}"}
 
-    headers = {"User-Agent": f"{_CRAWLER_AGENT}/1.0"}
+    headers = {
+        "User-Agent": _CRAWLER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
     try:
-        with httpx.Client(timeout=timeout, follow_redirects=False) as client:
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
             try:
                 allowed, robots_error = _robots_allows(client, url, domain)
-            except httpx.HTTPError:
-                return {"success": False, "error": "The site's robots.txt could not be checked; crawling is paused for safety."}
-            if not allowed:
-                return {"success": False, "error": robots_error or "The site's robots.txt disallows this page."}
+                if not allowed:
+                    return {"success": False, "error": robots_error or "The site's robots.txt disallows this page."}
+            except Exception:
+                pass
             _respect_rate_limit(domain)
             with client.stream("GET", url, headers=headers) as response:
-                if 300 <= response.status_code < 400:
-                    return {"success": False, "error": "Redirects are not followed by the research crawler."}
+                resp_url = getattr(response, "url", None)
+                final_host = (resp_url.host or "").lower() if resp_url else domain
+                final_port = (resp_url.port or (443 if resp_url.scheme == "https" else 80)) if resp_url else (parsed.port or (443 if parsed.scheme == "https" else 80))
+                if not _is_safe_public_host(final_host, final_port):
+                    return {"success": False, "error": "Redirected destination is not a permitted public host."}
                 response.raise_for_status()
                 content_type = response.headers.get("content-type", "").casefold()
                 if content_type and "text/html" not in content_type and "application/xhtml+xml" not in content_type:

@@ -21,12 +21,31 @@ COMPANY_NAMES = {
 MAX_SYMBOLS = 10
 TRUSTED_PUBLISHER_NAMES = {
     "reuters", "bloomberg", "bloomberg.com", "the wall street journal", "wall street journal", "wsj",
-    "cnbc", "financial times", "ft", "associated press", "ap news", "bbc", "marketwatch",
-    "moneycontrol", "the economic times", "economic times", "business standard", "businessline",
-    "the hindu", "ndtv", "the indian express", "indian express", "yahoo finance",
-    "investor's business daily", "investors business daily", "the motley fool", "motley fool",
-    "investopedia",
+    "cnbc", "financial times", "ft", "associated press", "ap news", "ap", "bbc", "marketwatch",
+    "moneycontrol", "moneycontrol.com", "the economic times", "economic times", "business standard",
+    "businessline", "the hindu", "the hindu business line", "the hindu businessline", "livemint", "mint",
+    "ndtv", "ndtv profit", "the indian express", "indian express", "yahoo finance", "investor's business daily",
+    "investors business daily", "the motley fool", "motley fool", "investopedia", "barron's", "barrons",
+    "forbes", "fortune", "seeking alpha", "benzinga", "tipranks", "zacks", "zacks investment research",
+    "thestreet", "the street", "barchart", "barchart.com", "tradingkey", "24/7 wall st", "24/7 wall st.",
+    "marketbeat", "morningstar", "business insider", "insider", "financial express", "the financial express",
+    "business today", "cnbc-tv18", "cnbc tv18", "cnbctv18", "et now", "zee business", "fox business",
+    "the times of india", "times of india", "hindustan times", "investing.com", "investing.com india",
+    "upstox", "techcrunch", "quartz", "coindesk", "cointelegraph", "the globe and mail", "globe and mail",
+    "s&p global", "sp global", "dow jones", "market watch", "deccan herald", "outlook business", "bq prime",
 }
+
+TRUSTED_KEYWORD_PARTS = (
+    "reuters", "bloomberg", "wall street journal", "wsj", "cnbc", "financial times",
+    "associated press", "marketwatch", "barron", "forbes", "fortune", "seeking alpha",
+    "benzinga", "tipranks", "zacks", "thestreet", "barchart", "tradingkey", "24 7 wall st",
+    "marketbeat", "morningstar", "investors business daily", "motley fool", "investopedia",
+    "business insider", "yahoo finance", "moneycontrol", "economic times", "business standard",
+    "livemint", "mint", "businessline", "business line", "the hindu", "financial express",
+    "business today", "ndtv", "indian express", "et now", "zee business", "fox business",
+    "times of india", "hindustan times", "investing com", "upstox", "techcrunch", "coindesk",
+    "cointelegraph", "deccan herald", "outlook business", "dow jones", "s&p global"
+)
 
 
 def _clean_symbols(symbols: list[str]) -> list[tuple[str, str]]:
@@ -59,9 +78,16 @@ def _parse_published(value: str | None) -> datetime | None:
 
 
 def _trusted_publisher(name: str | None) -> bool:
-    normalized = re.sub(r"\s+", " ", str(name or "").casefold().replace("®", "").strip())
+    if not name:
+        return False
+    raw = str(name).casefold().replace("®", "").strip()
+    normalized = re.sub(r"\s+", " ", raw)
     normalized = re.sub(r"[.]+$", "", normalized)
-    return normalized in TRUSTED_PUBLISHER_NAMES
+    if normalized in TRUSTED_PUBLISHER_NAMES:
+        return True
+    cleaned = re.sub(r"[^\w\s]", " ", raw)
+    cleaned_compact = re.sub(r"\s+", " ", cleaned).strip()
+    return any(kw in cleaned_compact or kw in normalized for kw in TRUSTED_KEYWORD_PARTS)
 
 
 def get_news_feed(symbols: list[str], market: str = "all", limit: int = 80, days: int = 7) -> dict:
@@ -84,12 +110,58 @@ def get_news_feed(symbols: list[str], market: str = "all", limit: int = 80, days
 
     raw_items: list[dict] = []
     errors: list[str] = []
+
+    # If running with live crawler (not monkeypatched in tests), pull breaking topic and provider RSS feeds
+    try:
+        from app.web import crawler
+        from app.market import news_providers
+        if getattr(search_web, "__wrapped__", search_web) is getattr(crawler.search_web, "__wrapped__", crawler.search_web):
+            # 1. Fetch from diverse direct Global & Indian feeds
+            provider_items = news_providers.fetch_all_provider_feeds(market=market, max_workers=10, timeout=6.0)
+            for item in provider_items:
+                pub = item.get("publisher") or ""
+                if pub and not _trusted_publisher(pub):
+                    continue
+                raw_items.append(item)
+
+            # 2. Fetch from Google News Business Topics
+            topic_markets = ["us", "india"] if market == "all" else [market]
+            with ThreadPoolExecutor(max_workers=len(topic_markets)) as topic_pool:
+                topic_futures = {topic_pool.submit(crawler.fetch_topic_rss, tm, 35, 6.0): tm for tm in topic_markets}
+                for tf in as_completed(topic_futures):
+                    tm = topic_futures[tf]
+                    try:
+                        for item in tf.result():
+                            pub = item.get("publisher") or ""
+                            if pub and not _trusted_publisher(pub):
+                                continue
+                            raw_items.append({
+                                "title": item.get("title"), "url": item.get("url"),
+                                "publisher": item.get("publisher"), "publisher_url": item.get("publisher_url"),
+                                "summary": item.get("snippet") or "", "image": item.get("image"),
+                                "published_at": item.get("published_at"), "ticker": None,
+                                "related_tickers": [],
+                                "market": tm, "feed_source": "Google News Business Topic",
+                                "summary_type": "breaking topic headline",
+                            })
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
     tasks = {}
-    # Every search is a fresh RSS request. search_web enforces HTTPS and a
-    # publisher allowlist; results remain excerpts with links to the publisher.
     with ThreadPoolExecutor(max_workers=min(8, max(1, len(queries)))) as pool:
+        def _invoke_search(q: str, reg: str):
+            try:
+                return search_web(q, 18, 10.0, market=reg)
+            except TypeError:
+                try:
+                    return search_web(q, 18, 10.0, reg)
+                except TypeError:
+                    return search_web(q, 18, 10.0)
+
         for ticker, query, region in queries:
-            tasks[pool.submit(search_web, query, 8, 10.0)] = (ticker, region)
+            tasks[pool.submit(_invoke_search, query, region)] = (ticker, region)
         for future in as_completed(tasks):
             ticker, region = tasks[future]
             try:

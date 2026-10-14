@@ -1,0 +1,7 @@
+if [ -f ".venv/Scripts/python.exe" ]; then
+    .venv/Scripts/python.exe -m pytest tests/test_forecasting_engine.py -q -p no:cacheprovider
+elif [ -f ".venv/bin/python" ]; then
+    .venv/bin/python -m pytest tests/test_forecasting_engine.py -q -p no:cacheprovider
+else
+    python -m pytest tests/test_forecasting_engine.py -q -p no:cacheprovider
+fi

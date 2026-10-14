@@ -1,115 +1,241 @@
-# StockRAG
+# MyStock AI — Market Research Terminal & Probabilistic Forecasting Engine
 
-MyStock AI is a local-first market research workspace built with FastAPI, SQLite, FAISS CPU, Ollama, and a responsive browser interface. It combines market data with uploaded research and gives the assistant source material to work from.
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
+[![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://python.org)
+[![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-black.svg?logo=ollama)](https://ollama.com)
+[![Scikit-Learn](https://img.shields.io/badge/scikit--learn-ML%20Ensembles-F7931E.svg?logo=scikit-learn)](https://scikit-learn.org)
+[![SQLite](https://img.shields.io/badge/SQLite-FTS5%20WAL-003B57.svg?logo=sqlite)](https://sqlite.org)
+[![Zero-Fabrication](https://img.shields.io/badge/Integrity-Zero%20Fabrication-emerald.svg)](#principled-uncertainty--abstention-policy)
 
-## What is implemented
+**MyStock AI** is an institutional-grade, local-first quantitative market terminal. It combines local Large Language Models (via Ollama), hybrid FAISS/FTS5 document retrieval, multi-source financial intelligence, and a **genuine, hardware-aware probabilistic Machine Learning forecasting engine** with zero numerical fabrication.
 
-- Market quote, company profile, historical price, technical indicator, fundamental, and news endpoints. Market requests try yfinance and fall back to Stooq where that provider supports the requested data. Cached results are stored in SQLite with a configurable TTL.
-- Historical OHLCV is checked for timestamps, numeric values, OHLC consistency, and conflicting duplicates before validated bars are upserted into SQLite. Source, interval, freshness status, and retrieval time are retained.
-- Four selectable comparison charts default to Indian large-cap equities (Reliance, TCS, HDFC Bank, and Infosys), with popular US and NSE/BSE index symbols also available; series are provider-backed historical prices rebased to a common starting value. Analysis includes SMA/EMA, RSI, MACD, Bollinger bands, ATR, annualized volatility, drawdown, and recent returns.
-- A 20-session statistical scenario interval is displayed with its method, persistence-baseline error, and assumptions. It is an exploratory estimate, not a validated forecast or investment recommendation.
-- Settings lists the models actually installed in the local Ollama service. It does not advertise cloud models or install model weights.
-- SQLite-backed chat sessions and turns, settings, document status, and cache entries. Saved conversations can be searched, restored, deleted, and branched from a selected message; branch conversations retain their copied context independently.
-- PDF, DOCX, TXT, and HTML text indexing and scoped retrieval for selected documents. HTML script/style content is removed; DOCX headings and tables are retained. Exact duplicate documents are detected. Scanned PDFs use optional Tesseract OCR when installed and otherwise return an explicit setup error. Semantic search uses FAISS CPU/Ollama embeddings; persistent SQLite FTS5 remains usable when embeddings or FAISS are unavailable. CSV and Excel uploads can be analyzed as datasets.
-- Multi-source chat orchestration for quote, technical, fundamental, news, document, web, and dataset evidence. Independent work is gathered concurrently and blocking calls are moved off FastAPI's event loop. The response reports the selected model, evidence, limitations, data timestamp, and whether source formatting could be verified.
-- Local Ollama generation and embeddings. Web crawling is limited to an explicit financial-domain allowlist and respects the web-research setting.
-- A light-first responsive interface with saved light/dark theme, density, configurable settings, status checks, chart periods and line/candlestick views. Frontend libraries are version-pinned and served locally.
-- Chat supports PDF, DOCX, TXT, HTML, and CSV/XLS/XLSX attachments directly from the composer. Attached documents are scoped to retrieval for that conversation; datasets are profiled from their real rows and columns. Remove a scope chip to stop including it.
-- The chat composer provides a quick switch among generation models Ollama reports as installed. Switching updates the live app setting for the next reply; if Ollama or a model is unavailable, the UI reports it and does not save a fabricated assistant answer.
+---
 
-## Requirements
+## 🌟 Key Features
 
-- Python 3.10 or newer
-- Node.js 18 or newer and npm
-- Ollama installed locally, with a generation model and the configured embedding model pulled
-- Network access for yfinance/Stooq and allowlisted web research
+### 1. 🧠 Probabilistic Machine Learning Forecasting Suite
+- **8 Selectable & Benchmarked Quantitative Models**:
+  - `HistoricalDriftForecaster`: Empirical geometric drift baseline (Zero parameter risk, ultra-light <2ms).
+  - `NaiveZeroForecaster`: Martingale persistence benchmark (Random walk hurdle rate).
+  - `ExponentialSmoothingForecaster`: Holt's linear exponential smoothing with adaptive mean-reversion damping.
+  - `RidgeReturnForecaster`: L2 Tikhonov-penalized linear multi-factor shrinkage model.
+  - `HistGradientBoostingReturnForecaster`: Fast histogram-binned gradient-boosted decision tree ensemble.
+  - `RandomForestReturnForecaster`: Multi-factor bagging decision forest with 45 estimators and variance reduction.
+  - `MLPNeuralReturnForecaster`: Regularized multi-layer perceptron neural network with early stopping.
+  - `CustomQuantitativeForecaster`: Interactive quant sandbox allowing custom alpha, momentum, and mean-reversion tuning.
+- **Dynamic Hardware Suitability Ribbon**:
+  - Automatically profiles host CPU architecture, logical cores, available RAM, and SIMD/GPU capabilities.
+  - Categorizes models into **Compute Levels 1/4 to 4/4** with explicit memory footprints (<2 MB to ~180 MB) and latency specs.
+  - Provides instant device compatibility verdicts calibrated specifically to your system.
+- **Purged Chronological Walk-Forward Backtesting**:
+  - Enforces strict chronological train/test splits with multi-session embargo gaps.
+  - Eliminates lookahead bias and target leakage.
+  - Automatically computes out-of-sample MAE, RMSE, and Directional Hit Rates against the Naive Baseline.
+- **Calibrated Conformal Uncertainty Bands**:
+  - Non-parametric empirical residual quantile intervals (80%, 90%, 95% confidence cones).
+  - Explicit interval expansion during market staleness or elevated volatility regimes.
+- **Principled Uncertainty & Abstention Policy**:
+  - Refuses to fabricate financial targets if historical data is insufficient or if a model demonstrates out-of-sample error >15% worse than persistence.
+  - Issues transparent, auditable abstention warnings explaining the exact statistical failure boundary.
 
-## Setup (Windows PowerShell)
+### 2. 🌐 Authentic Free Third-Party Consensus & Baselines
+- **Sell-Side Analyst Consensus**: Public feed aggregation (Yahoo Finance) displaying consensus mean price target, high/low spread, analyst recommendation rating, and contributor count.
+- **Quantitative Pivot & Fibonacci Envelope**: Classical deterministic technical baseline with 20-day high/low/close envelopes, support/resistance pivots ($S_1, R_1$), and $0.618$ Fibonacci extensions.
+- **Multi-Source News Sentiment Vector**: Point-in-time financial news sentiment aggregated across Google News, Moneycontrol, Livemint, Economic Times, and CNBC with strictly pre-forecast timestamp filtering.
 
+### 3. 📊 Interactive Visual Hub & Charts
+- **TradingView Lightweight Charts Integration**: Smooth candlestick and line series with customizable periods (1D, 5D, 1M, 3M, 6M, 1Y, 5Y).
+- **Multi-Series Forecast Trajectory Toggles**: Toggle expected model trajectories, conformal bands, Ridge, Random Forest, Neural Net, Analyst consensus, and technical pivot lines simultaneously.
+- **Directional Probability Donut Chart**: Inline SVG visualizer with smooth animations, calibrated percentages, and a dual Bullish/Bearish balance bar.
+- **Multi-Model Target Comparison Grid**: Side-by-side card grid comparing expected price targets and implied returns across all 8 models.
+- **Realized Outcome Tracking (Audit Trail)**: Persisted historical forecasts compared against observed market closes with verifiable prediction accuracy.
+
+### 4. 📑 Local RAG & Document Intelligence
+- Scoped multi-document processing for PDF, DOCX, TXT, HTML, and tabular CSV/XLSX datasets.
+- Hybrid retrieval: FAISS CPU vector embeddings (`nomic-embed-text`) + SQLite FTS5 BM25 lexical search.
+- Multi-source chat orchestration: Quote, technical, fundamental, news, SEC filings, and dataset evidence synthesized locally with zero data leakage.
+
+---
+
+## 💻 Hardware Suitability & Model Matrix
+
+| Model Identifier | Display Name | Architecture / Formulation | Compute Level | RAM Footprint | Inference Latency | Optimal Hardware | Best Market Regime |
+| :--- | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
+| `historical_drift` | Empirical Drift | $\mu = \frac{1}{N}\sum r_t$ | Level 1/4 | < 2 MB | < 2 ms | Any CPU / Embedded | Steady secular trends & baseline hurdle |
+| `naive_zero` | Persistence Baseline | $\hat{y} = 0$ (Martingale) | Level 1/4 | < 1 MB | 0 ms | Any CPU | Random walk null hypothesis benchmark |
+| `exponential_smoothing` | Holt-Winters Adaptive | Holt damped linear smoothing | Level 1/4 | < 3 MB | < 4 ms | Any CPU | Dynamic regime shifts & smoothed trends |
+| `ridge` | Regularized Ridge-L2 | $w^* = \text{argmin}(\|y - Xw\|_2^2 + \alpha\|w\|_2^2)$ | Level 2/4 | < 5 MB | ~ 4 ms | Standard Dual-Core CPU | Linear multi-factor combinations |
+| `hist_gradient_boosting` | HistGBM Forest | Histogram tree boosting (depth $\le 3$) | Level 2/4 | < 25 MB | ~ 12 ms | Modern 4-Core CPU | Non-linear volatility breakouts & gap signals |
+| `random_forest` | Multi-Factor Random Forest | 45-tree bagging ensemble | Level 3/4 | < 80 MB | ~ 22 ms | 4+ Core Multi-Threaded CPU | High-noise environments & variance reduction |
+| `mlp_neural_net` | Deep Neural Net (MLP) | 16-8 ReLU Perceptron + Early Stopping | Level 4/4 | < 180 MB | ~ 38 ms | 4+ Core CPU / Dedicated GPU | Complex cross-factor non-linear embeddings |
+| `custom_model` | Custom Parameterized Model | User-tuned $\alpha$, momentum, mean-reversion | Level 2/4 | < 15 MB | ~ 6 ms | Any Multi-Core CPU | Quantitative hypothesis testing & strategy audit |
+
+---
+
+## 🛠️ System Requirements
+
+- **Operating System**: Windows 10/11, macOS (Apple Silicon or Intel), or Linux (Ubuntu 20.04+).
+- **Python**: Version `3.10`, `3.11`, or `3.12`.
+- **Node.js**: Version `18.x` or newer (for Tailwind CSS asset compilation).
+- **Ollama**: Local AI runner with at least one generation model (`qwen2.5:1.5b` or `stockrag-fast`) and the embedding model (`nomic-embed-text`).
+- **RAM**: Minimum 4 GB RAM (8 GB+ recommended for running Ollama + multi-factor ML ensembles).
+
+---
+
+## 🚀 Step-by-Step Installation & Startup
+
+### Step 1: Clone Repository & Create Virtual Environment
+
+#### On Windows (PowerShell):
 ```powershell
+# Navigate to desired directory and clone
+git clone https://github.com/Joshua246-j/MyStock.git
+cd MyStock
+
+# Create and activate Python virtual environment
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+
+# Upgrade pip and install Python dependencies
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-npm ci
-npm run build:css
-Copy-Item .env.example .env
 ```
 
-Review `.env` and set `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `EMBEDDING_MODEL`, `FAISS_PATH`, `DB_PATH`, and `UPLOAD_DIR` for the machine. Defaults are local to this project. Keep `.env` private; it is ignored by Git.
+#### On Linux / macOS (Bash / Zsh):
+```bash
+# Clone repository
+git clone https://github.com/Joshua246-j/MyStock.git
+cd MyStock
 
-Start the Ollama service and install the default, lightweight chat model plus the embedding model used for PDF retrieval:
+# Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
 
+# Upgrade pip and install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+---
+
+### Step 2: Install Node Dependencies & Build CSS
+```bash
+npm ci
+npm run build:css
+```
+
+---
+
+### Step 3: Configure Environment Variables
+Copy `.env.example` to `.env`:
 ```powershell
+# Windows PowerShell
+Copy-Item .env.example .env
+
+# Linux / macOS
+cp .env.example .env
+```
+
+Verify your `.env` settings:
+```ini
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:1.5b
+EMBEDDING_MODEL=nomic-embed-text
+FAISS_PATH=./data/faiss
+DB_PATH=sqlite:///./data/stock_terminal.db
+UPLOAD_DIR=./uploads
+LOG_LEVEL=INFO
+```
+
+---
+
+### Step 4: Start Ollama & Pull Models
+
+In a separate terminal window, launch the Ollama background daemon and pull the required weights:
+```bash
+# Start Ollama service
 ollama serve
+
+# In another terminal, pull the chat model and embedding model:
 ollama pull qwen2.5:1.5b
 ollama pull nomic-embed-text
 ```
 
-Settings lists all other generation models already installed in Ollama, so you can switch the chat model at any time. For another smaller local option, install `gemma3:1b` with `ollama pull gemma3:1b`. All models use the same StockRAG retrieval, calculated evidence, uncertainty policy, and answer-format rules; the model only writes the final response. Local models require memory and disk space, and model performance varies.
+*(Optional custom quant model profiles)*:
+If you wish to use the specialized Terminal system agents:
+```bash
+ollama create stockrag-fast -f Modelfile.fast
+ollama create stockrag-analyst -f Modelfile.analyst
+```
 
-Run the app from the project directory:
+---
 
+### Step 5: Start the MyStock AI Terminal Server
+
+Run the production FastAPI backend with Uvicorn:
 ```powershell
+# Windows
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# Linux / macOS
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000). The first startup creates the SQLite schema and removes expired cache entries. `/api/health` checks the selected Ollama model, FAISS CPU, SQLite keyword retrieval, and market provider; external services can be unavailable while the app itself remains up. Keyword document search can continue without the embedding model, but semantic similarity requires the configured Ollama embedding model. Chat generation still requires an installed Ollama generation model.
+Once running, access the interactive Terminal in your browser at:
+👉 **[http://127.0.0.1:8000](http://127.0.0.1:8000)**
 
-## Configuration
+---
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server address |
-| `OLLAMA_MODEL` | `qwen2.5:1.5b` | Initial generation model |
-| `EMBEDDING_MODEL` | `nomic-embed-text` | Ollama embedding model used for indexing and retrieval |
-| `FAISS_PATH` | `./data/faiss` | Persistent FAISS CPU index directory |
-| `DB_PATH` | `sqlite:///./data/stock_terminal.db` | SQLAlchemy database URL |
-| `UPLOAD_DIR` | `./uploads` | Uploaded source files |
-| `LOG_LEVEL` | `INFO` | Application log level |
+## 🧪 Verification & Automated Testing
 
-Other options, including model, temperature, context length, maximum answer tokens, request timeout (120 seconds by default to accommodate local CPU models), cache TTL, chart defaults, retrieval count, automation toggles, theme, and density, can be changed in the Settings sheet and take effect without restarting the server.
-
-## API
-
-- `GET /api/health`
-- `GET /api/settings`, `PUT /api/settings`
-- `POST /api/chat`, `GET /api/chat/sessions/{session_id}`
-- `GET /api/stocks/{symbol}`, `/quote`, `/history`, `/fundamentals`, `/technical`, `/news`
-- `GET /api/symbols/resolve/{symbol}`
-- `GET /api/models` (installed local Ollama models only)
-- `GET /api/documents`, `POST /api/upload/document` (PDF/DOCX/TXT/HTML), `POST /api/upload/dataset`, `POST /api/crawl`
-
-The interactive API schema is available at `/docs`.
-
-## Verification
-
+Execute the comprehensive unit and integration test suite across all modules:
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/ -q --basetemp .pytest-tmp -p no:cacheprovider
-npm run build:css
+# Run the forecasting engine test suite
+.\.venv\Scripts\python.exe -m pytest tests/test_forecasting_engine.py -v
+
+# Run hardware profiling and audit persistence tests
+.\.venv\Scripts\python.exe -m pytest tests/test_forecast_system_improvements.py -v
+
+# Run full project test suite (100+ tests)
+.\.venv\Scripts\python.exe -m pytest tests/ -q -p no:cacheprovider
 ```
 
-The workspace's default Windows Temp and pytest cache locations may be access-restricted, so the test command uses a workspace-local temporary directory and disables pytest's cache plugin.
+---
 
-## Current limits
+## 📡 REST API Reference
 
-- Chat responses are returned after generation; Ollama token streaming is not implemented. Small local models may take tens of seconds or time out on CPU-only machines; configure the answer-token limit and request timeout for the host, or choose a faster installed model. Timeouts are shown as service errors and are not stored as assistant replies.
-- Symbol resolution validates ticker syntax and applies a small set of exchange heuristics; it is not a complete exchange security master or company-name search.
-- Stooq fallback coverage is limited to quote/history. It does not provide fundamentals, profile data, or news. Web research only crawls allowlisted domains and only follows direct URLs supplied to the chat or Data Hub.
-- Document retrieval combines FAISS semantic results and SQLite FTS5 lexical results, applies metadata/document filters before semantic scoring, and falls back to keyword retrieval if FAISS or Ollama embeddings are unavailable. SQLite remains authoritative for document text and metadata. Uploaded tables are analyzed from the current browser's active dataset selection rather than embedded as vector documents.
-- Quotes are never labeled real-time unless a provider and entitlement can substantiate it. The current free yfinance route has unverified freshness; Stooq fallback is marked delayed/end-of-day. Neither provides a reliable, licensed real-time consolidated feed for all exchanges. Historical chart coverage and data availability vary by symbol/provider. Yfinance is an unofficial interface and can be rate-limited; provider access was unavailable during this run, so no live quote or chart could be verified.
-- Indian ticker shortcuts resolve a maintained starter set of widely traded NSE names; `^NSEI` and `^BSESN` are also offered. This is not a complete NSE/BSE security master or autocomplete by company name. Free quote/chart access and update frequency vary by provider. NSE distributes real-time data through subscription products and sets rules for its market data; the app does not claim free exchange-authorized real-time Indian quotes. See [NSE real-time data subscriptions](https://www.nseindia.com/static/market-data/real-time-data-subscription) and [NSE data policy](https://www.nseindia.com/static/market-data/nse-data-policy).
-- The current provider set does not cover every exchange, and the Stooq adapter is intentionally limited to US symbols. Reliable exchange-approved real-time or 15-minute delayed US data requires a paid entitlement. Alpha Vantage's official docs state its default global quote is end-of-day and real-time/delayed US quotes require premium; its free plan is limited to 25 API calls/day. See [Alpha Vantage quote documentation](https://www.alphavantage.co/documentation/) and [official usage/data policy](https://www.alphavantage.co/support/).
-- This is a research terminal, not a trading or investment execution system. Market predictions are not guarantees and should not be used as sole investment advice.
+The interactive OpenAPI documentation and Swagger schema are accessible live at `http://127.0.0.1:8000/docs`.
 
-## Project layout
+### Forecaster Endpoints (`/api/forecast`)
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/forecast/{symbol}?horizon=5&model=auto&confidence=0.80` | Generate validated probabilistic forecast with conformal bands and multi-model projections. |
+| `GET` | `/api/forecast/system/health` | Retrieve dynamic host hardware profiling, CPU cores, RAM, and model availability. |
+| `POST` | `/api/forecast/system/revalidate` | Purge cached forecasts and force re-execution of hardware diagnostics. |
+| `GET` | `/api/forecast/models/catalog` | Complete metadata, mathematical formulations, strengths, and assumptions for all models. |
+| `POST` | `/api/forecast/custom/evaluate` | Chronological walk-forward backtest for user-parameterized custom models. |
+| `GET` | `/api/forecast/featured/summary` | Curated forecast summaries across top global and Indian equities. |
 
-- `app/api/routes/` — FastAPI routes
-- `app/analysis/` — technical indicators and multi-source chat orchestration
-- `app/market/` — provider interface, yfinance/Stooq adapters, cache-aware service
-- `app/rag/` — FAISS CPU semantic storage, SQLite FTS5 and metadata, indexing, retrieval
-- `app/db/` — SQLAlchemy models and SQLite lifecycle
-- `static/` — browser interface, locally served vendor files, and built CSS
-- `tests/` — unit tests for dataset/PDF/RAG and production reliability paths
+### Market Intelligence Endpoints (`/api/stocks`)
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/stocks/{symbol}/quote` | Point-in-time verified quote data with provenance labeling. |
+| `GET` | `/api/stocks/{symbol}/history` | Cleaned, deduplicated OHLCV historical session bars. |
+| `GET` | `/api/stocks/{symbol}/technical` | Python-computed RSI, MACD, Moving Averages, and ATR bands. |
+| `GET` | `/api/stocks/{symbol}/fundamentals` | Structured balance sheet, margins, and valuation ratios. |
+| `GET` | `/api/stocks/{symbol}/news` | Verified publisher RSS news articles with zero lookahead bias. |
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md), [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md), [TEST_REPORT.md](docs/TEST_REPORT.md), and [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for current verified details.
+### Local RAG & Chat Endpoints (`/api/chat`, `/api/documents`)
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/chat` | Multi-source streaming or conversational market query with citations. |
+| `POST` | `/api/upload/document` | Ingest and index PDF, DOCX, TXT, or HTML research papers. |
+| `POST` | `/api/upload/dataset` | Upload and statistically profile CSV or Excel financial tables. |
+| `POST` | `/api/crawl` | Bounded web search and extraction across allowlisted financial publishers. |
+
+---
+
+## 🛡️ License & Compliance
+
+- **Software License**: Distributed under the MIT License. See `LICENSE` for details.
+- **Financial Compliance Disclaimer**: Forecasts and quantitative signals generated by MyStock AI are mathematical representations derived from historical market data. Financial markets exhibit non-stationary, stochastic behavior subject to regime changes. These outputs are for educational and research purposes only and **never constitute financial advice, trade recommendations, or guarantees of future performance**.

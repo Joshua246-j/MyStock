@@ -11,105 +11,167 @@
     <script defer src="/static/vendor/lucide.js"></script>
     <script defer src="/static/vendor/lightweight-charts.js"></script>
     
-    <link rel="stylesheet" href="/static/index.css?v=20261010-1">
+    <link rel="stylesheet" href="/static/index.css?v=20261011-4">
 </head>
-<body class="h-screen w-full flex overflow-hidden selection:bg-apple-blue selection:text-white">
+<body class="h-screen w-full flex flex-col overflow-hidden selection:bg-apple-blue selection:text-white">
 
-    <!-- Left Sidebar -->
-    <aside class="w-20 md:w-64 glass-sidebar flex flex-col z-30 shrink-0 transition-all duration-300 relative">
-        <div class="h-20 flex items-center justify-center md:justify-start md:px-6 border-b border-black/5 dark:border-white/5">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-apple-blue to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <i data-lucide="activity" class="w-5 h-5 text-white"></i>
+    <!-- Mobile Sidebar Backdrop -->
+    <div id="sidebar-backdrop" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 hidden" onclick="toggleSidebar(false)"></div>
+
+    <!-- Universal Modern Top Navigation Bar (Consistent across ALL pages) -->
+    <header id="main-terminal-header" class="h-14 sm:h-16 bg-white/75 dark:bg-[#161618]/75 backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08] flex items-center px-4 sm:px-6 shrink-0 z-30 justify-between gap-3 sm:gap-4 select-none">
+        <!-- Left: Brand Logo -->
+        <button type="button" onclick="showView('dashboard')" class="flex items-center gap-2.5 text-left group shrink-0" title="MyStock AI Terminal">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#0071e3] to-[#38bdf8] flex items-center justify-center shadow-sm shadow-blue-500/25 group-hover:scale-105 group-active:scale-95 transition-all duration-200">
+                <i data-lucide="activity" class="w-4 h-4 text-white"></i>
             </div>
-            <span class="text-xl font-bold tracking-tight ml-3 hidden md:block text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300">MyStock AI</span>
-        </div>
-        
-        <div class="flex-1 overflow-y-auto py-6 px-3 md:px-4 space-y-2">
-            <div class="text-[10px] font-bold uppercase tracking-widest text-apple-gray mb-3 px-2 hidden md:block">Navigation</div>
-
-            <button onclick="showView('dashboard')" title="Markets" class="nav-item active w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium">
-                <i data-lucide="layout-grid" class="w-5 h-5 md:mr-3 opacity-70"></i>
-                <span class="hidden md:block">Markets</span>
-            </button>
-
-            <button onclick="focusSearch()" title="Search" class="nav-item mobile-search-nav w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium">
-                <i data-lucide="search" class="w-5 h-5 md:mr-3 opacity-70"></i>
-                <span class="hidden md:block">Search</span>
-            </button>
-
-            <button onclick="showView('watchlist')" title="Watchlist" class="nav-item w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium">
-                <i data-lucide="star" class="w-5 h-5 md:mr-3 opacity-70"></i>
-                <span class="hidden md:block">Watchlist</span>
-            </button>
-
-            <button onclick="showView('news')" title="News" class="nav-item w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium">
-                <i data-lucide="newspaper" class="w-5 h-5 md:mr-3 opacity-70"></i>
-                <span class="hidden md:block">News</span>
-            </button>
-
-            <div class="text-[10px] font-bold uppercase tracking-widest text-apple-gray mb-3 mt-8 px-2 hidden md:block">Intelligence</div>
-            
-            <button onclick="focusChat()" title="AI Research" class="nav-item w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium relative">
-                <i data-lucide="sparkles" class="w-5 h-5 md:mr-3 opacity-70"></i>
-                <span class="hidden md:block">AI Assistant</span>
-            </button>
-
-            <button onclick="toggleModal('docs-modal')" title="Documents" data-mobile-nav="hidden" class="nav-item w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium">
-                <i data-lucide="database" class="w-5 h-5 md:mr-3 opacity-70"></i>
-                <span class="hidden md:block">Data Hub</span>
-            </button>
-
-            <div class="text-[10px] font-bold uppercase tracking-widest text-apple-gray mb-3 mt-8 px-2 hidden md:block">System</div>
-            
-            <button onclick="toggleModal('settings-modal')" title="Settings" data-mobile-nav="hidden" class="nav-item w-full flex items-center justify-center md:justify-start px-3 py-3 rounded-xl text-sm font-medium">
-                <i data-lucide="settings" class="w-5 h-5 md:mr-3 opacity-70"></i>
-                <span class="hidden md:block">Settings</span>
-            </button>
-        </div>
-
-        <div class="p-4 border-t border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5 hidden md:block">
-            <div class="flex items-center justify-between text-xs font-medium mb-3 text-apple-gray">
-                <span class="flex items-center gap-2"><i data-lucide="globe" class="w-3.5 h-3.5"></i> Market Data <span class="text-[10px] font-normal" id="status-api-text">Checking</span></span>
-                <div class="w-2.5 h-2.5 rounded-full" id="status-api" style="background: #8e8e93"></div>
+            <div class="flex flex-col">
+                <span class="text-[13.5px] font-semibold tracking-tight text-gray-900 dark:text-gray-100 group-hover:text-apple-blue transition-colors leading-none">MyStock AI</span>
+                <span class="text-[10px] text-apple-gray font-medium tracking-normal mt-0.5 hidden sm:inline">Market Terminal</span>
             </div>
-            <div class="flex items-center justify-between text-xs font-medium text-apple-gray">
-                <span class="flex items-center gap-2"><i data-lucide="cpu" class="w-3.5 h-3.5"></i> Local LLM <span class="text-[10px] font-normal" id="status-ollama-text">Checking</span></span>
-                <div class="w-2.5 h-2.5 rounded-full" id="status-ollama" style="background: #8e8e93"></div>
-            </div>
-            <div class="mt-3 flex items-center justify-between text-xs font-medium text-apple-gray">
-                <span class="flex items-center gap-2"><i data-lucide="database" class="w-3.5 h-3.5"></i> Document Index <span class="text-[10px] font-normal" id="status-faiss-text">Checking</span></span>
-                <div class="w-2.5 h-2.5 rounded-full" id="status-faiss" style="background: #8e8e93"></div>
-            </div>
-        </div>
-    </aside>
+        </button>
 
-    <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col min-w-0 relative h-full">
-        
-        <!-- Header -->
-        <header class="h-20 glass-panel border-b-0 border-x-0 rounded-none flex items-center px-6 shrink-0 z-20 justify-between">
-            <div class="relative w-full max-w-xl group">
-                <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                    <i data-lucide="search" class="w-5 h-5 text-apple-gray group-focus-within:text-apple-blue transition-colors"></i>
+        <!-- Center: Modern Universal Navigation Bar Tabs (Stylish iOS Segmented Dock) -->
+        <nav id="floating-dock" class="top-nav-tabs flex items-center p-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] backdrop-blur-xl shadow-xs gap-0.5 sm:gap-1" aria-label="Terminal Navigation">
+            <button type="button" onclick="showView('dashboard')" data-route="dashboard" class="dock-btn active group" title="Markets at a glance">
+                <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+                <span class="dock-label">Markets</span>
+            </button>
+            <button type="button" onclick="showView('watchlist')" data-route="watchlist" class="dock-btn group" title="Your Watchlist">
+                <i data-lucide="star" class="w-3.5 h-3.5 text-amber-500"></i>
+                <span class="dock-label">Watchlist</span>
+                <span id="dock-watchlist-badge" class="dock-badge hidden">0</span>
+            </button>
+            <button type="button" onclick="showView('news')" data-route="news" class="dock-btn group" title="Publisher Market News">
+                <i data-lucide="newspaper" class="w-3.5 h-3.5"></i>
+                <span class="dock-label">News</span>
+            </button>
+            <button type="button" onclick="showView('compare')" data-route="compare" class="dock-btn group" title="Compare Multiple Tickers">
+                <i data-lucide="chart-line" class="w-3.5 h-3.5"></i>
+                <span class="dock-label">Compare</span>
+            </button>
+            <button type="button" onclick="toggleModal('docs-modal')" class="dock-btn group" title="Upload documents or crawl pages (Data Hub)">
+                <i data-lucide="database" class="w-3.5 h-3.5 text-indigo-500"></i>
+                <span class="dock-label">Data Hub</span>
+            </button>
+
+            <div class="w-px h-3.5 bg-black/10 dark:bg-white/10 mx-0.5 shrink-0 hidden sm:block"></div>
+
+            <!-- Prominent AI Assistant Button -->
+            <button type="button" onclick="showView('ai')" data-route="ai" class="dock-btn dock-btn-ai group" title="Launch AI Research Assistant">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                <span class="dock-label font-semibold">AI Chat</span>
+            </button>
+        </nav>
+
+        <!-- Right: Ticker Search & Quick System Actions (iOS Minimal Style) -->
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <!-- Compact Ticker Search Bar (iOS Spotlight Style) -->
+            <div class="relative group top-search-wrapper">
+                <div class="absolute inset-y-0 left-2.5 flex items-center pointer-events-none">
+                    <i data-lucide="search" class="w-3.5 h-3.5 text-apple-gray group-focus-within:text-apple-blue transition-colors"></i>
                 </div>
                 <input type="text" id="symbol-input" 
-                       class="w-full bg-black/5 dark:bg-white/5 border border-transparent rounded-2xl pl-12 pr-4 py-3 text-base focus:outline-none input-glow transition-all backdrop-blur-md"
-                       list="symbol-suggestions" placeholder="Search a ticker symbol…" 
+                       class="w-full bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.08] rounded-full pl-8 pr-7 py-1.5 text-xs text-gray-800 dark:text-gray-200 placeholder:text-apple-gray focus:outline-none focus:ring-2 focus:ring-apple-blue/30 focus:border-apple-blue/50 transition-all shadow-2xs"
+                       list="symbol-suggestions" placeholder="Search ticker…" 
                        onkeydown="if(event.key === 'Enter') handleSearch()">
-                <datalist id="symbol-suggestions"><option value="AAPL"><option value="MSFT"><option value="NVDA"><option value="GOOGL"><option value="AMZN"><option value="META"><option value="TSLA"><option value="BRK.B"><option value="TCS"><option value="INFY"><option value="RELIANCE"></datalist>
+                <span class="absolute inset-y-0 right-2.5 flex items-center pointer-events-none text-[10px] text-apple-gray/60 font-mono">↵</span>
+                <datalist id="symbol-suggestions"><option value="AAPL"><option value="MSFT"><option value="NVDA"><option value="GOOGL"><option value="AMZN"><option value="META"><option value="TSLA"><option value="BRK.B"><option value="RELIANCE.NS"><option value="TCS.NS"><option value="INFY.NS"><option value="HDFCBANK.NS"></datalist>
             </div>
-            <button type="button" class="system-status-trigger flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-xs font-semibold text-apple-gray hover:bg-black/5 dark:hover:bg-white/5" id="header-health" aria-label="Project status: checking" aria-haspopup="dialog" aria-expanded="false" aria-controls="system-status-popover" onclick="toggleSystemStatus()" title="Open project status details">
-                <span class="status-dot" id="status-summary-dot" aria-hidden="true"></span>
-                <i data-lucide="activity" class="h-4 w-4" aria-hidden="true"></i>
-                <span id="status-summary">Checking</span>
+
+            <!-- Quick Action Buttons: Circular iOS Style -->
+            <button type="button" onclick="toggleTheme()" class="w-8 h-8 rounded-full flex items-center justify-center text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 bg-black/[0.03] dark:bg-white/[0.05] hover:bg-black/[0.07] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/[0.08] transition-all active:scale-95 shadow-2xs" title="Toggle Light / Dark Mode" aria-label="Toggle Theme">
+                <i data-lucide="sun-moon" class="w-3.5 h-3.5"></i>
             </button>
-        </header>
+            <button type="button" onclick="toggleModal('settings-modal')" class="w-8 h-8 rounded-full flex items-center justify-center text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 bg-black/[0.03] dark:bg-white/[0.05] hover:bg-black/[0.07] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/[0.08] transition-all active:scale-95 shadow-2xs" title="Terminal Settings" aria-label="Terminal Settings">
+                <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+            </button>
+
+            <!-- System & AI Diagnostic Status Pill (Modern iOS Minimal Dynamic Island / Status Pill) -->
+            <button type="button" 
+                    id="header-health" 
+                    class="system-status-trigger flex h-8 shrink-0 items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold border transition-all duration-200 cursor-pointer shadow-2xs group bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 active:scale-95"
+                    aria-label="System status: checking" 
+                    aria-haspopup="dialog" 
+                    aria-expanded="false" 
+                    aria-controls="system-status-popover" 
+                    onclick="toggleSystemStatus()" 
+                    title="Click for full system diagnostics">
+                <div class="relative flex items-center justify-center w-2 h-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse status-dot" id="status-summary-dot" aria-hidden="true"></span>
+                </div>
+                <span id="status-summary" class="text-[11px] font-semibold tracking-tight">System Ready</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- App Body Area (Sidebar on left when in AI Chat, Main view on right) -->
+    <div class="flex-1 flex min-h-0 min-w-0 overflow-hidden relative w-full">
+        <!-- Dedicated Chatbot Conversation History Sidebar Panel (Active only in AI Chat) -->
+        <aside id="app-sidebar" class="app-sidebar w-[280px] glass-sidebar flex flex-col z-20 shrink-0 transition-all duration-300 relative h-full border-r border-black/5 dark:border-white/5 hidden">
+            <!-- Sidebar Header: Title, Return to Market, Collapse Toggle -->
+            <div class="h-14 sm:h-16 flex items-center justify-between px-4 border-b border-black/5 dark:border-white/5 shrink-0">
+                <div class="flex items-center gap-2.5 text-left">
+                    <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-apple-blue to-blue-600 flex items-center justify-center shadow-md shadow-blue-500/25">
+                        <i data-lucide="message-square" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-sm font-bold tracking-tight text-gray-900 dark:text-gray-100">Chat History</span>
+                        <span class="text-[10px] text-apple-gray font-medium -mt-0.5">Local Conversations</span>
+                    </div>
+                </div>
+                <button type="button" onclick="toggleSidebar()" class="w-8 h-8 rounded-lg flex items-center justify-center text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 transition-colors" title="Collapse chat history" aria-label="Collapse chat history">
+                    <i data-lucide="panel-left-close" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Chat Controls: New Chat -->
+            <div class="p-3 pb-2 shrink-0 border-b border-black/5 dark:border-white/5">
+                <button type="button" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-apple-blue text-white hover:bg-blue-600 font-semibold text-xs transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]" onclick="showView('ai'); resetChatSession(); if(window.innerWidth < 768) toggleSidebar(false);" title="Start new conversation">
+                    <span class="flex items-center gap-2">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>New chat</span>
+                    </span>
+                    <span class="text-[10px] opacity-80 bg-white/20 px-1.5 py-0.5 rounded font-mono">⌘N</span>
+                </button>
+            </div>
+
+            <!-- Chat History Search & Filterable List -->
+            <div class="flex-1 flex flex-col min-h-0 px-3 pt-3">
+                <div class="relative mb-2.5 shrink-0">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-apple-gray pointer-events-none z-10"></i>
+                    <input id="chat-history-search" type="text" placeholder="Search conversations..." class="w-full bg-black/5 dark:bg-white/5 border border-transparent rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-apple-blue transition-all" oninput="filterChatHistory(this.value)">
+                </div>
+                
+                <div id="chat-history-list" class="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar text-xs" aria-live="polite">
+                    <p class="px-2 py-4 text-xs text-apple-gray text-center">Loading conversations…</p>
+                </div>
+                <p id="chat-history-status" class="py-1 text-[10px] text-apple-gray text-center font-medium truncate shrink-0" role="status"></p>
+            </div>
+
+            <!-- Sidebar Footer: Health & Quick Settings -->
+            <div class="p-3 border-t border-black/5 dark:border-white/5 bg-black/[.02] dark:bg-white/[.02] shrink-0 flex items-center justify-between">
+                <button type="button" onclick="toggleSystemStatus()" class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-xs text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 transition-colors border border-transparent hover:border-black/5 dark:hover:border-white/5" title="View system and model health">
+                    <div class="relative flex items-center justify-center">
+                        <i data-lucide="activity" class="w-3.5 h-3.5 shrink-0" id="sidebar-status-icon"></i>
+                        <span class="w-2 h-2 rounded-full absolute -top-0.5 -right-0.5 ring-2 ring-white dark:ring-[#161618] bg-gray-400" id="sidebar-status-dot"></span>
+                    </div>
+                    <span id="sidebar-status-text" class="font-semibold text-[11px]">System Status</span>
+                </button>
+                <button type="button" onclick="toggleModal('settings-modal')" class="p-2 rounded-lg text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 transition-colors" title="Settings">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area (Full screen width for terminal pages) -->
+        <main class="flex-1 flex flex-col min-w-0 relative h-full">
 
         <!-- Dynamic Layout Area -->
         <div class="flex-1 flex overflow-hidden relative">
             
             <!-- Left Data View -->
-            <div class="flex-1 overflow-y-auto px-6 py-8 md:px-10 scroll-smooth pb-32" id="dashboard-view">
+            <div class="flex-1 overflow-y-auto px-6 py-8 md:px-10 scroll-smooth pb-12" id="dashboard-view">
                 
                 <!-- Empty State -->
                 <div id="empty-state" class="mx-auto max-w-[1500px] space-y-7 animate-fade-in">
@@ -117,12 +179,54 @@
                         <div><p class="mb-2 text-xs font-semibold uppercase tracking-[.18em] text-apple-blue">MyStock AI · Research terminal</p><h1 class="text-3xl font-semibold tracking-tight md:text-4xl">Markets at a glance</h1><p class="mt-2 max-w-2xl text-sm text-apple-gray">Provider-backed prices, recent market coverage, and research tools in one workspace.</p></div>
                         <button onclick="focusChat()" class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-2xl bg-apple-blue px-4 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5 hover:bg-blue-600 sm:self-auto"><i data-lucide="sparkles" class="h-4 w-4"></i> Ask AI</button>
                     </section>
+
                     <section aria-labelledby="overview-heading">
                         <div class="mb-3 flex items-center justify-between gap-3"><div><h2 id="overview-heading" class="text-base font-semibold">Market watch</h2><p class="mt-1 text-xs text-apple-gray">Eight actively followed US and Indian tickers · mini charts show recent closes</p></div><button type="button" onclick="loadLandingOverview(true)" class="min-h-11 rounded-xl px-3 text-sm font-medium text-apple-blue transition hover:bg-black/5 dark:hover:bg-white/5"><i data-lucide="refresh-cw" class="mr-1 inline h-4 w-4"></i>Refresh</button></div>
                         <div id="landing-watch-grid" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-live="polite"></div>
                         <p id="watchlist-empty" class="hidden py-8 text-center text-sm text-apple-gray">Your watchlist is empty. Search for a company and select the star to add it.</p>
                         <p id="landing-market-status" class="mt-2 text-xs text-apple-gray" role="status">Loading provider-backed market data…</p>
                     </section>
+
+                    <!-- Small-Size Quantitative ML Forecasts Section (Below stock charts, above news) -->
+                    <section class="glass-panel relative rounded-2xl p-4 sm:p-5 border border-indigo-500/15 shadow-xs bg-gradient-to-r from-indigo-500/[0.03] via-transparent to-purple-500/[0.02]" aria-labelledby="forecast-hub-heading">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
+                                    <i data-lucide="brain-circuit" class="w-4 h-4"></i>
+                                </span>
+                                <div>
+                                    <h2 id="forecast-hub-heading" class="text-sm sm:text-base font-bold tracking-tight flex items-center gap-2">
+                                        Quantitative ML Forecasts
+                                        <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Point-in-Time OOS</span>
+                                    </h2>
+                                    <p class="text-[11px] text-apple-gray">Walk-forward return projections with calibrated conformal uncertainty bounds</p>
+                                </div>
+                            </div>
+                            <!-- Horizon selector -->
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-semibold text-apple-gray">Horizon:</span>
+                                <div class="flex gap-1 bg-black/5 dark:bg-white/5 p-0.5 rounded-lg text-xs" id="landing-forecast-horizon-selector">
+                                    <button type="button" class="px-2.5 py-1 rounded-md font-semibold transition-all landing-horizon-btn" data-horizon="1" onclick="changeLandingForecastHorizon(1)">1D</button>
+                                    <button type="button" class="px-2.5 py-1 rounded-md font-semibold transition-all landing-horizon-btn active bg-white dark:bg-black/50 text-indigo-600 dark:text-indigo-400 shadow-xs" data-horizon="5" onclick="changeLandingForecastHorizon(5)">5D</button>
+                                    <button type="button" class="px-2.5 py-1 rounded-md font-semibold transition-all landing-horizon-btn" data-horizon="20" onclick="changeLandingForecastHorizon(20)">20D</button>
+                                </div>
+                                <button type="button" onclick="loadLandingForecasts(true)" class="p-1.5 rounded-lg text-apple-gray hover:text-indigo-600 hover:bg-black/5 dark:hover:bg-white/5 transition" title="Refresh forecasts">
+                                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Compact Featured Forecasts Grid (6 items) -->
+                        <div id="landing-forecast-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" aria-live="polite">
+                            <!-- Populated dynamically with compact forecast cards -->
+                        </div>
+
+                        <div class="mt-3 pt-2.5 border-t border-black/[0.04] dark:border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-[10px] text-apple-gray font-medium">
+                            <span class="inline-flex items-center gap-1.5"><i data-lucide="cpu" class="w-3 h-3 text-indigo-500"></i> Pure CPU (<15ms) · Conformal Empirical Bounds · Zero Leakage</span>
+                            <span class="italic">Select any stock card for full backtest audit & multi-model comparison</span>
+                        </div>
+                    </section>
+
                     <section class="glass-panel rounded-3xl p-5 md:p-6">
                         <div class="mb-3 flex flex-wrap items-center justify-between gap-3"><div><p class="text-xs font-semibold uppercase tracking-[.15em] text-apple-blue">The latest</p><h2 class="mt-1 text-xl font-semibold">Market headlines</h2><p class="mt-1 text-xs text-apple-gray">A short preview from configured publishers.</p></div><button type="button" onclick="showView('news')" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-apple-blue hover:bg-black/5">Open news feed <i data-lucide="arrow-up-right" class="ml-1 inline h-4 w-4"></i></button></div>
                         <div id="landing-news-feed" class="divide-y divide-black/5 dark:divide-white/10" aria-live="polite"><p class="py-8 text-center text-sm text-apple-gray">Gathering recent headlines…</p></div>
@@ -135,7 +239,12 @@
                             <div class="glass-panel rounded-2xl p-3"><label class="text-xs text-apple-gray" for="compare-symbol-1">Index 2</label><select id="compare-symbol-1" class="compare-symbol my-2 w-full rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm dark:bg-black/20" onchange="loadComparisons()"></select><div id="compare-chart-1" class="h-36"></div><p id="compare-source-1" class="mt-1 text-[10px] text-apple-gray"></p></div>
                             <div class="glass-panel rounded-2xl p-3"><label class="text-xs text-apple-gray" for="compare-symbol-2">Index 3</label><select id="compare-symbol-2" class="compare-symbol my-2 w-full rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm dark:bg-black/20" onchange="loadComparisons()"></select><div id="compare-chart-2" class="h-36"></div><p id="compare-source-2" class="mt-1 text-[10px] text-apple-gray"></p></div>
                             <div class="glass-panel rounded-2xl p-3"><label class="text-xs text-apple-gray" for="compare-symbol-3">Index 4</label><select id="compare-symbol-3" class="compare-symbol my-2 w-full rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm dark:bg-black/20" onchange="loadComparisons()"></select><div id="compare-chart-3" class="h-36"></div><p id="compare-source-3" class="mt-1 text-[10px] text-apple-gray"></p></div>
-                        </div><p id="comparison-note" class="mt-3 text-xs text-apple-gray" role="status"></p>
+                            <div class="glass-panel rounded-2xl p-3"><label class="text-xs text-apple-gray" for="compare-symbol-4">Index 5</label><select id="compare-symbol-4" class="compare-symbol my-2 w-full rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm dark:bg-black/20" onchange="loadComparisons()"></select><div id="compare-chart-4" class="h-36"></div><p id="compare-source-4" class="mt-1 text-[10px] text-apple-gray"></p></div>
+                            <div class="glass-panel rounded-2xl p-3"><label class="text-xs text-apple-gray" for="compare-symbol-5">Index 6</label><select id="compare-symbol-5" class="compare-symbol my-2 w-full rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm dark:bg-black/20" onchange="loadComparisons()"></select><div id="compare-chart-5" class="h-36"></div><p id="compare-source-5" class="mt-1 text-[10px] text-apple-gray"></p></div>
+                            <div class="glass-panel rounded-2xl p-3"><label class="text-xs text-apple-gray" for="compare-symbol-6">Index 7</label><select id="compare-symbol-6" class="compare-symbol my-2 w-full rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm dark:bg-black/20" onchange="loadComparisons()"></select><div id="compare-chart-6" class="h-36"></div><p id="compare-source-6" class="mt-1 text-[10px] text-apple-gray"></p></div>
+                            <div class="glass-panel rounded-2xl p-3"><label class="text-xs text-apple-gray" for="compare-symbol-7">Index 8</label><select id="compare-symbol-7" class="compare-symbol my-2 w-full rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm dark:bg-black/20" onchange="loadComparisons()"></select><div id="compare-chart-7" class="h-36"></div><p id="compare-source-7" class="mt-1 text-[10px] text-apple-gray"></p></div>
+                        </div>
+                        <p id="comparison-note" class="mt-3 text-xs text-apple-gray" role="status"></p>
                     </div>
                 </div>
 
@@ -162,19 +271,6 @@
                     <div id="market-comparison-mount"></div>
                 </section>
 
-                <section id="ai-page" class="hidden mx-auto flex min-h-full max-w-6xl flex-col gap-5 animate-fade-in pb-28" aria-labelledby="ai-page-heading">
-                    <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-xs font-semibold uppercase tracking-[.16em] text-apple-blue">Grounded research workspace</p><h1 id="ai-page-heading" class="mt-1 text-2xl font-semibold tracking-tight">AI research</h1><p class="mt-1 max-w-2xl text-sm text-apple-gray">Ask about stocks, provider headlines, uploaded documents, or crawled pages. Answers use the selected local model and available evidence.</p></div><div class="flex shrink-0 flex-wrap gap-2"><button type="button" onclick="toggleModal('docs-modal')" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-black/10 px-3 text-sm font-semibold hover:border-apple-blue dark:border-white/10"><i data-lucide="database" class="h-4 w-4"></i>Data hub</button><span id="ai-page-health" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-black/[.04] px-3 text-xs font-semibold text-apple-gray dark:bg-white/[.06]" role="status"><i data-lucide="loader-circle" class="h-4 w-4"></i>Connecting to Ollama…</span></div></header>
-                    <div id="ai-chat-mount" class="ai-chat-layout min-h-0 flex-1">
-                        <aside id="chat-history" class="chat-history" aria-label="Conversation history">
-                            <div class="flex items-center justify-between gap-2"><h2 class="text-xs font-bold uppercase tracking-wider text-apple-gray">History</h2><button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-black/5" onclick="toggleChatHistory(false)" aria-label="Close conversation history"><i data-lucide="panel-left-close" class="h-4 w-4"></i></button></div>
-                            <button type="button" class="mt-3 flex min-h-11 w-full items-center gap-2 rounded-xl bg-apple-blue px-3 text-left text-sm font-semibold text-white" onclick="resetChatSession()"><i data-lucide="square-pen" class="h-4 w-4"></i>New chat</button>
-                            <label class="relative mt-3 block"><i data-lucide="search" class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-apple-gray"></i><input id="chat-history-search" type="search" placeholder="Search conversations" class="min-h-10 w-full rounded-xl border border-black/10 bg-white/70 pl-9 pr-3 text-xs outline-none focus:border-apple-blue dark:bg-black/20" oninput="filterChatHistory(this.value)"></label>
-                            <div id="chat-history-list" class="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto" aria-live="polite"><p class="px-2 py-3 text-xs text-apple-gray">Loading conversations…</p></div>
-                            <p id="chat-history-status" class="mt-2 text-[10px] text-apple-gray" role="status"></p>
-                        </aside>
-                        <div id="ai-chat-workspace" class="min-h-0 min-w-0 flex-1"></div>
-                    </div>
-                </section>
 
                 <section id="watchlist-page" class="hidden mx-auto max-w-6xl animate-fade-in pb-28" aria-labelledby="watchlist-heading">
                     <header class="mb-6"><p class="text-xs font-semibold uppercase tracking-[.16em] text-apple-blue">Your saved market list</p><h1 id="watchlist-heading" class="mt-1 text-2xl font-semibold tracking-tight">Watchlist</h1><p class="mt-1 text-sm text-apple-gray">Follow prices and open a symbol for its full chart and research.</p></header>
@@ -221,7 +317,11 @@
                                 <button class="chart-period-btn" onclick="loadChartData('1y')">1Y</button>
                             </div>
                         </div>
-                        <div class="mb-3 flex justify-end gap-2" role="group" aria-label="Chart style">
+                        <div class="mb-3 flex justify-end gap-2 items-center" role="group" aria-label="Chart style">
+                            <label class="text-xs text-apple-gray flex items-center gap-1.5 mr-2 cursor-pointer">
+                                <input type="checkbox" id="chart-auto-adjust" class="rounded border-black/20 text-apple-blue focus:ring-apple-blue" checked onchange="toggleAutoAdjust()">
+                                Adjusted Close
+                            </label>
                             <button class="chart-style-btn active" onclick="setChartStyle('line')" aria-pressed="true">Line</button>
                             <button class="chart-style-btn" onclick="setChartStyle('candlestick')" aria-pressed="false">Candles</button>
                         </div>
@@ -234,6 +334,7 @@
                             <button type="button" class="analysis-tab" role="tab" tabindex="-1" aria-selected="false" data-analysis-view="macd" onclick="setAnalysisView('macd')">MACD</button>
                             <button type="button" class="analysis-tab" role="tab" tabindex="-1" aria-selected="false" data-analysis-view="atr" onclick="setAnalysisView('atr')">Volatility · ATR</button>
                             <button type="button" class="analysis-tab" role="tab" tabindex="-1" aria-selected="false" data-analysis-view="performance" onclick="setAnalysisView('performance')">Performance</button>
+                            <button type="button" class="analysis-tab" role="tab" tabindex="-1" aria-selected="false" data-analysis-view="forecast" onclick="setAnalysisView('forecast')">Forecast ML</button>
                         </div>
                         <p id="analysis-chart-caption" class="mb-2 text-xs text-apple-gray">OHLC price history from the configured market provider.</p>
                         <p id="chart-source-status" class="mb-2 text-xs text-apple-gray" aria-live="polite"></p>
@@ -254,6 +355,7 @@
                     <div class="flex gap-8 border-b border-black/10 dark:border-white/10 mt-8 mb-6 animate-slide-up" style="animation-delay: 0.2s;">
                         <button class="tab-btn active pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('overview')">Overview</button>
                         <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('technical')">Technical</button>
+                        <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide flex items-center gap-1.5" onclick="switchTab('forecast')"><i data-lucide="trending-up" class="w-3.5 h-3.5 text-indigo-500"></i> Forecast <span class="bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-indigo-500/20">ML</span></button>
                         <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('fundamentals')">Fundamentals</button>
                         <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide flex items-center gap-2" onclick="switchTab('news')">News <span class="bg-apple-blue text-white text-[10px] px-1.5 rounded-full" id="news-badge">0</span></button>
                     </div>
@@ -276,6 +378,420 @@
                             </div>
                         </div>
 
+                        <!-- Forecast ML -->
+                        <div id="tab-forecast" class="tab-content hidden animate-fade-in space-y-6">
+                            <!-- Engine, Data Freshness & Hardware Health Status Bar -->
+                            <div class="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl bg-indigo-500/[0.04] border border-indigo-500/15 text-xs text-apple-gray">
+                                <div class="flex flex-wrap items-center gap-2.5">
+                                    <span id="forecast-engine-status-badge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        <span id="forecast-engine-status-text">QUANT ENGINE READY</span>
+                                    </span>
+                                    <span id="forecast-hardware-summary" class="text-[11px] font-medium text-gray-700 dark:text-gray-300">Detecting Hardware & CPU Path...</span>
+                                    <span id="forecast-freshness-pill" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20" title="Source: yfinance free tier · Verified monotonic timestamps">
+                                        <i data-lucide="check-circle" class="w-3 h-3"></i> <span id="forecast-freshness-text">DATA FRESH</span>
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-2 text-[11px]">
+                                    <button type="button" onclick="openSystemHealthModal()" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-500/20 hover:bg-indigo-500/15 active:scale-95 transition" title="Inspect CPU/RAM profile, service health, and trigger diagnostic repair">
+                                        <i data-lucide="activity" class="w-3.5 h-3.5"></i> System Health & Repair
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Controls Header -->
+                            <div class="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-black/[0.025] dark:bg-white/[0.035] border border-black/[0.06] dark:border-white/[0.08]">
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-semibold text-apple-gray">Horizon:</span>
+                                        <div class="flex gap-1 bg-black/5 dark:bg-white/5 p-0.5 rounded-lg text-xs" id="forecast-horizon-selector">
+                                            <button type="button" class="px-2.5 py-1 rounded-md font-semibold transition-all forecast-horizon-btn" data-horizon="1" onclick="changeForecastHorizon(1)">1D</button>
+                                            <button type="button" class="px-2.5 py-1 rounded-md font-semibold transition-all forecast-horizon-btn active bg-white dark:bg-black/40 text-apple-blue shadow-xs" data-horizon="5" onclick="changeForecastHorizon(5)">5D</button>
+                                            <button type="button" class="px-2.5 py-1 rounded-md font-semibold transition-all forecast-horizon-btn" data-horizon="20" onclick="changeForecastHorizon(20)">20D</button>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-semibold text-apple-gray">Model:</span>
+                                        <select id="forecast-model-select" onchange="onModelSelectChanged()" class="text-xs bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg px-2.5 py-1 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-apple-blue font-medium">
+                                            <optgroup label="⚡ Ultra-Lightweight & Empirical Baselines">
+                                                <option value="historical_drift" selected>StockAI Empirical Drift Baseline (Default · Ultra-Light)</option>
+                                                <option value="naive_zero">StockAI Persistence Baseline (Zero-Return · Martingale)</option>
+                                                <option value="exponential_smoothing">StockAI Holt-Winters Exponential (Adaptive Trend · Ultra-Light)</option>
+                                            </optgroup>
+                                            <optgroup label="🧠 Regularized Machine Learning (Linear & Tree Ensembles)">
+                                                <option value="ridge">StockAI Regularized Ridge-L2 (Penalized Linear · Lightweight)</option>
+                                                <option value="hist_gradient_boosting">StockAI Ensemble Gradient Forest (HistGBM · Moderate Compute)</option>
+                                                <option value="random_forest">StockAI Multi-Factor Random Forest (Multi-Tree · Medium Compute)</option>
+                                            </optgroup>
+                                            <optgroup label="⚡ High-Capacity Deep Models (Higher RAM/Compute Needed)">
+                                                <option value="mlp_neural_net">StockAI Deep Neural Perceptron (MLP · High Capacity)</option>
+                                            </optgroup>
+                                            <optgroup label="⚙️ Custom Models & Auto Engine">
+                                                <option value="auto">Auto (Best Chronological Out-of-Sample Validated Model)</option>
+                                                <option value="custom_model">Custom Parameterized Model (User Hypothesis Benchmark)</option>
+                                            </optgroup>
+                                        </select>
+                                        <button type="button" onclick="openModelInfoModal()" id="model-info-btn" class="px-2 py-1 rounded-lg text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 active:scale-95 transition flex items-center gap-1 shadow-xs" title="View prediction methodology, mathematical formulas, data requirements, and validation metrics for selected model">
+                                            <i data-lucide="info" class="w-3.5 h-3.5"></i> Model Info
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-semibold text-apple-gray">Interval:</span>
+                                        <select id="forecast-confidence-select" onchange="runForecast()" class="text-xs bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg px-2 py-1 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-apple-blue">
+                                            <option value="0.80">80% Conformal Band</option>
+                                            <option value="0.90">90% Conformal Band</option>
+                                            <option value="0.95">95% Conformal Band</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button type="button" onclick="openCustomModelModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-black/5 dark:bg-white/5 text-gray-700 dark:text-gray-300 border border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10 active:scale-95 transition-all shadow-xs" title="Configure custom regularizers and test walk-forward performance">
+                                        <i data-lucide="sliders" class="w-3.5 h-3.5"></i> Test Custom Model
+                                    </button>
+                                    <button type="button" onclick="runForecast(true)" id="forecast-refresh-btn" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-apple-blue text-white hover:bg-apple-blue/90 active:scale-95 transition-all shadow-xs">
+                                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Run Forecast
+                                    </button>
+                                    <button type="button" onclick="askAiAboutForecast()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/15 active:scale-95 transition-all">
+                                        <i data-lucide="message-square" class="w-3.5 h-3.5"></i> Explain with AI
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Dynamic Model Device Suitability & Specs Ribbon -->
+                            <div id="dynamic-model-specs-ribbon" class="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-indigo-500/[0.03] dark:bg-indigo-500/[0.05] border border-indigo-500/15 text-xs transition-all duration-300">
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-[10px] uppercase tracking-wider font-bold text-apple-gray">Model Tier:</span>
+                                        <span id="model-spec-tier-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Ultra-Lightweight Baseline</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-[10px] uppercase tracking-wider font-bold text-apple-gray">Compute:</span>
+                                        <span id="model-spec-capacity-badge" class="font-mono text-[11px] text-gray-700 dark:text-gray-300">Level 1/4 · &lt; 2 MB RAM</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-[10px] uppercase tracking-wider font-bold text-apple-gray">Device Verdict:</span>
+                                        <span id="model-spec-device-verdict" class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">✓ 100% Optimal for your device</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[11px] text-apple-gray hidden sm:inline" id="model-spec-best-for">Best for: Steady macro trends &amp; empirical hurdle rate</span>
+                                    <button type="button" onclick="openModelInfoModal()" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 active:scale-95 transition flex items-center gap-1 shadow-xs" title="View complete mathematical formulations, assumptions, and out-of-sample caveats">
+                                        <i data-lucide="info" class="w-3.5 h-3.5"></i> Inspect Math
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Forecast Alert / Abstention Banner -->
+                            <div id="forecast-alert-banner" class="hidden p-4 rounded-2xl border text-xs leading-relaxed"></div>
+
+                            <!-- Dedicated Interactive Forecast Chart Component -->
+                            <div class="glass-panel p-5 rounded-3xl border border-indigo-500/15 shadow-sm">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <h3 class="text-base font-bold tracking-tight">Probabilistic Trajectory & Conformal Uncertainty Band</h3>
+                                            <span id="forecast-chart-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase">Model Active</span>
+                                        </div>
+                                        <p id="forecast-chart-caption" class="text-xs text-apple-gray mt-0.5">Historical price series leading to cutoff origin date, transitioning into projected trajectory with calibrated confidence interval cone.</p>
+                                    </div>
+                                    <div class="flex items-center gap-4 text-xs font-medium">
+                                        <span class="inline-flex items-center gap-1.5"><span class="w-3.5 h-0.5 bg-indigo-500 inline-block"></span> <span class="text-gray-700 dark:text-gray-300">Expected Path</span></span>
+                                        <span class="inline-flex items-center gap-1.5"><span class="w-3.5 h-2 bg-indigo-500/20 border border-dashed border-indigo-400 inline-block rounded-xs"></span> <span class="text-gray-700 dark:text-gray-300">Conformal Band</span></span>
+                                    </div>
+                                </div>
+                                <div class="w-full h-[360px] min-h-[360px] relative rounded-2xl overflow-hidden bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.05]">
+                                    <div id="forecastDedicatedChart" style="width:100%;height:100%;min-height:360px;"></div>
+                                    <div id="forecast-chart-hover-tip" class="chart-hover-tip" aria-live="polite">Move across the forecast chart to inspect historical and projected price bounds</div>
+                                    <div id="forecast-chart-loading" class="absolute inset-0 flex flex-col items-center justify-center bg-white/70 dark:bg-black/70 backdrop-blur-sm rounded-2xl hidden z-10">
+                                        <div class="flex gap-1.5 mb-2">
+                                            <div class="w-2.5 h-2.5 rounded-full bg-indigo-500 loading-dot"></div>
+                                            <div class="w-2.5 h-2.5 rounded-full bg-indigo-500 loading-dot" style="animation-delay: 0.2s"></div>
+                                            <div class="w-2.5 h-2.5 rounded-full bg-indigo-500 loading-dot" style="animation-delay: 0.4s"></div>
+                                        </div>
+                                        <span class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Computing walk-forward forecast & uncertainty cone...</span>
+                                    </div>
+                                </div>
+
+                                <!-- Interactive Chart Projection Series Toggles -->
+                                <div class="mt-3 pt-3 border-t border-black/[0.05] dark:border-white/[0.06] flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="text-[11px] font-bold uppercase tracking-wider text-apple-gray">Chart Lines:</span>
+                                        <div class="flex flex-wrap gap-1.5" id="forecast-series-toggles">
+                                            <button type="button" class="series-toggle-pill active px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all" data-series="selected" onclick="toggleForecastSeries('selected')">
+                                                <span class="w-2 h-2 rounded-full inline-block bg-indigo-500 mr-1"></span><span id="active-model-pill-label">Selected Model</span>
+                                            </button>
+                                            <button type="button" class="series-toggle-pill px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all" data-series="ridge" onclick="toggleForecastSeries('ridge')">
+                                                <span class="w-2 h-2 rounded-full inline-block bg-sky-500 mr-1"></span>Ridge L2
+                                            </button>
+                                            <button type="button" class="series-toggle-pill px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all" data-series="random_forest" onclick="toggleForecastSeries('random_forest')">
+                                                <span class="w-2 h-2 rounded-full inline-block bg-teal-500 mr-1"></span>Random Forest
+                                            </button>
+                                            <button type="button" class="series-toggle-pill px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all" data-series="mlp_neural_net" onclick="toggleForecastSeries('mlp_neural_net')">
+                                                <span class="w-2 h-2 rounded-full inline-block bg-purple-500 mr-1"></span>Neural Net
+                                            </button>
+                                            <button type="button" class="series-toggle-pill px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all" data-series="exponential_smoothing" onclick="toggleForecastSeries('exponential_smoothing')">
+                                                <span class="w-2 h-2 rounded-full inline-block bg-orange-500 mr-1"></span>Exp Smoothing
+                                            </button>
+                                            <button type="button" class="series-toggle-pill px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all" data-series="drift" onclick="toggleForecastSeries('drift')">
+                                                <span class="w-2 h-2 rounded-full inline-block bg-amber-500 mr-1"></span>Drift Baseline
+                                            </button>
+                                            <button type="button" class="series-toggle-pill active px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all" data-series="analyst" onclick="toggleForecastSeries('analyst')">
+                                                <span class="w-2 h-2 rounded-full inline-block bg-emerald-500 mr-1"></span>Analyst Consensus
+                                            </button>
+                                            <button type="button" class="series-toggle-pill px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all" data-series="pivot" onclick="toggleForecastSeries('pivot')">
+                                                <span class="w-2 h-2 rounded-full inline-block bg-purple-500 mr-1"></span>Technical Pivot
+                                            </button>
+                                            <button type="button" class="series-toggle-pill active px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all" data-series="bands" onclick="toggleForecastSeries('bands')">
+                                                <span class="w-2 h-2 rounded-full inline-block bg-indigo-300 border border-dashed border-indigo-500 mr-1"></span>Conformal Band
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <span class="text-[10px] text-apple-gray italic">Click pills to highlight or isolate forecasts</span>
+                                </div>
+                            </div>
+
+                            <!-- Primary Metric Cards -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="forecast-cards-container">
+                                <!-- Target Price & Interval -->
+                                <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
+                                    <span class="text-[11px] font-semibold tracking-wider text-apple-gray uppercase block mb-1">Expected Price Target</span>
+                                    <div class="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100" id="forecast-target-price">--</div>
+                                    <div class="text-xs font-medium text-apple-gray mt-1" id="forecast-price-interval">Range: --</div>
+                                </div>
+
+                                <!-- Expected Return -->
+                                <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
+                                    <span class="text-[11px] font-semibold tracking-wider text-apple-gray uppercase block mb-1">Expected Return</span>
+                                    <div class="text-2xl font-bold tracking-tight" id="forecast-expected-return">--</div>
+                                    <div class="text-xs font-medium text-apple-gray mt-1" id="forecast-direction-label">Direction: --</div>
+                                </div>
+
+                                <!-- Directional Probability -->
+                                <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
+                                    <span class="text-[11px] font-semibold tracking-wider text-apple-gray uppercase block mb-1">Directional Probability</span>
+                                    <div class="text-2xl font-bold tracking-tight text-indigo-600 dark:text-indigo-400" id="forecast-prob-val">--</div>
+                                    <div class="text-xs font-medium text-apple-gray mt-1" id="forecast-model-name">Model: --</div>
+                                </div>
+
+                                <!-- Walk-Forward Performance -->
+                                <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
+                                    <span class="text-[11px] font-semibold tracking-wider text-apple-gray uppercase block mb-1">OOS Validation MAE</span>
+                                    <div class="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400" id="forecast-val-mae">--</div>
+                                    <div class="text-xs font-medium text-apple-gray mt-1" id="forecast-baseline-comp">vs Baseline: --</div>
+                                </div>
+                            </div>
+
+                            <!-- Authentic Free 3rd-Party Resources & Consensus Panel -->
+                            <div class="glass-panel p-5 rounded-3xl border border-black/[0.06] dark:border-white/[0.08]">
+                                <div class="flex items-center justify-between mb-3.5">
+                                    <div>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
+                                            <i data-lucide="globe" class="w-3.5 h-3.5 text-apple-blue"></i> Free 3rd-Party Consensus & Quantitative Baselines
+                                        </h4>
+                                        <p class="text-xs text-apple-gray mt-0.5">Cross-referenced against verified public external sources with explicit provenance and reliability labeling.</p>
+                                    </div>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-black/5 dark:bg-white/5 text-apple-gray">Non-Fabricated Evidence</span>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5" id="third-party-consensus-cards">
+                                    <!-- Populated dynamically with Yahoo Analyst Consensus, Technical Pivot/Fibonacci, and Multi-Source Sentiment Vector -->
+                                </div>
+                            </div>
+
+                            <!-- Modern Visual Analysis Hub: Directional Donut, Factor Allocation, Backtest History -->
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                <!-- Directional Probability Donut Chart -->
+                                <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] flex flex-col justify-between">
+                                    <div>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray mb-1 flex items-center gap-1.5">
+                                            <i data-lucide="pie-chart" class="w-3.5 h-3.5 text-indigo-500"></i> Directional Probability Distribution
+                                        </h4>
+                                        <p class="text-[11px] text-apple-gray">Empirical probability of positive forward return</p>
+                                    </div>
+                                    <div class="my-3 flex items-center justify-center">
+                                        <div class="relative w-32 h-32 flex items-center justify-center" id="directional-donut-container">
+                                            <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36" id="directional-donut-svg">
+                                                <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(150, 150, 150, 0.2)" stroke-width="3.5"></circle>
+                                                <circle id="directional-donut-bull-arc" cx="18" cy="18" r="14" fill="none" stroke="#10b981" stroke-width="3.5" pathLength="100" stroke-dasharray="50 50" stroke-dashoffset="0" stroke-linecap="round" style="transition: stroke-dasharray 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);"></circle>
+                                                <circle id="directional-donut-bear-arc" cx="18" cy="18" r="14" fill="none" stroke="#f43f5e" stroke-width="3.5" pathLength="100" stroke-dasharray="50 50" stroke-dashoffset="-50" stroke-linecap="round" style="transition: stroke-dasharray 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);"></circle>
+                                            </svg>
+                                            <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                                <span class="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100" id="directional-donut-pct">--%</span>
+                                                <span class="text-[9px] font-bold text-apple-gray uppercase" id="directional-donut-label">--</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Dual Balance Bar -->
+                                    <div class="w-full h-2 rounded-full overflow-hidden flex bg-black/5 dark:bg-white/10 my-1">
+                                        <div id="donut-balance-bull" class="h-full bg-emerald-500 transition-all duration-500" style="width: 50%;"></div>
+                                        <div id="donut-balance-bear" class="h-full bg-rose-500 transition-all duration-500" style="width: 50%;"></div>
+                                    </div>
+                                    <div class="flex justify-around text-xs pt-2 border-t border-black/[0.04] dark:border-white/[0.06]">
+                                        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-[11px]" id="donut-bull-text">Bullish: --%</span></div>
+                                        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-500"></span><span class="text-[11px]" id="donut-bear-text">Bearish: --%</span></div>
+                                    </div>
+                                </div>
+
+                                <!-- Key Signal Factor Allocation Breakdown -->
+                                <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] flex flex-col justify-between">
+                                    <div>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray mb-1 flex items-center gap-1.5">
+                                            <i data-lucide="sliders" class="w-3.5 h-3.5 text-apple-blue"></i> Signal Factor Allocation Breakdown
+                                        </h4>
+                                        <p class="text-[11px] text-apple-gray">Relative weighting across predictive feature clusters</p>
+                                    </div>
+                                    <div class="my-2 space-y-2 text-xs" id="factor-allocation-bars">
+                                        <!-- Populated dynamically with percentage bars & weights -->
+                                    </div>
+                                    <p class="text-[10px] text-apple-gray pt-2 border-t border-black/[0.04] dark:border-white/[0.06]">
+                                        Weights derived from train-set model coefficients and divergence.
+                                    </p>
+                                </div>
+
+                                <!-- Past Walk-Forward Evaluation History -->
+                                <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] flex flex-col justify-between">
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1">
+                                            <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
+                                                <i data-lucide="history" class="w-3.5 h-3.5 text-purple-500"></i> Past Walk-Forward History
+                                            </h4>
+                                            <span class="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-black/5 dark:bg-white/5 text-apple-gray">Recent OOS</span>
+                                        </div>
+                                        <p class="text-[11px] text-apple-gray">Verifiable record of historical prediction accuracy</p>
+                                    </div>
+                                    <div class="my-2 max-h-36 overflow-y-auto space-y-1.5 text-xs pr-1" id="forecast-backtest-history-list">
+                                        <!-- Populated dynamically with past predictions vs realized returns -->
+                                    </div>
+                                    <div class="flex items-center justify-between text-[10px] text-apple-gray pt-2 border-t border-black/[0.04] dark:border-white/[0.06]">
+                                        <span id="backtest-history-hit-summary">Directional Hits: --/--</span>
+                                        <span class="text-emerald-500 font-semibold" id="backtest-history-winrate">--% Accuracy</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Multi-Model Projection & Target Comparison Panel -->
+                            <div class="glass-panel p-5 rounded-3xl border border-black/[0.06] dark:border-white/[0.08]">
+                                <div class="flex flex-wrap items-center justify-between gap-2 mb-3.5">
+                                    <div>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
+                                            <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-500"></i> Multi-Model Forecast Target & Expected Return Comparison
+                                        </h4>
+                                        <p class="text-xs text-apple-gray mt-0.5">Direct side-by-side comparison across all 8 statistical, ensemble, neural, and baseline models for the current horizon.</p>
+                                    </div>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">All Models Evaluated</span>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" id="multi-model-comparison-bars">
+                                    <!-- Dynamically rendered comparative model cards with projected price, return %, and mini progress bar -->
+                                </div>
+                            </div>
+
+                            <!-- Realized Outcome Tracking (Audit Trail) -->
+                            <div class="glass-panel p-5 rounded-3xl border border-black/[0.06] dark:border-white/[0.08]">
+                                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                    <div>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
+                                            <i data-lucide="check-check" class="w-3.5 h-3.5 text-emerald-500"></i> Realized Outcome Tracking (Audit Trail)
+                                        </h4>
+                                        <p class="text-xs text-apple-gray mt-0.5">Persisted past predictions compared against subsequently observed market closes.</p>
+                                    </div>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Zero Fabrication</span>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-xs text-left" id="realized-outcomes-table">
+                                        <thead>
+                                            <tr class="border-b border-black/[0.06] dark:border-white/[0.08] text-apple-gray">
+                                                <th class="py-2 font-semibold">Origin Date</th>
+                                                <th class="py-2 font-semibold">Model</th>
+                                                <th class="py-2 font-semibold">Horizon</th>
+                                                <th class="py-2 font-semibold">Ref Price</th>
+                                                <th class="py-2 font-semibold">Forecast Target</th>
+                                                <th class="py-2 font-semibold">Target Date</th>
+                                                <th class="py-2 font-semibold">Realized Price</th>
+                                                <th class="py-2 font-semibold">Realized Error</th>
+                                                <th class="py-2 font-semibold text-right">Directional Outcome</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="realized-outcomes-tbody" class="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+                                            <tr>
+                                                <td colspan="9" class="py-3 text-center text-apple-gray italic">No completed forecast horizon has elapsed for this stock yet. Newly logged forecasts will automatically record realized error once target dates arrive.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Explanatory Signal Drivers & Backtest Details Grid -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Top Driving Signals & Cutoff Values -->
+                                <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
+                                            <i data-lucide="sliders" class="w-3.5 h-3.5 text-apple-blue"></i> Key Signal Contributions
+                                        </h4>
+                                        <span class="text-[10px] text-apple-gray">Values as of forecast cutoff</span>
+                                    </div>
+                                    <div id="forecast-signals-list" class="space-y-2 text-xs">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+
+                                <!-- Model Audit & Validation Summary -->
+                                <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
+                                    <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray mb-3 flex items-center gap-1.5">
+                                        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-500"></i> Rigorous Walk-Forward Audit
+                                    </h4>
+                                    <div id="forecast-audit-details" class="space-y-2 text-xs text-gray-700 dark:text-gray-300">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Comparative Walk-Forward Benchmark Grid -->
+                            <div class="glass-panel p-5 rounded-3xl border border-black/[0.06] dark:border-white/[0.08]">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
+                                            <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-indigo-500"></i> Walk-Forward Model Comparison (Out-of-Sample)
+                                        </h4>
+                                        <p class="text-xs text-apple-gray mt-0.5">Chronologically evaluated across holdout sessions with zero target overlap.</p>
+                                    </div>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-black/5 dark:bg-white/5 text-apple-gray">Selection Metric: Min OOS MAE</span>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-xs text-left" id="forecast-benchmark-table">
+                                        <thead>
+                                            <tr class="border-b border-black/[0.06] dark:border-white/[0.08] text-apple-gray">
+                                                <th class="py-2 font-semibold">Model</th>
+                                                <th class="py-2 font-semibold">Holdout MAE</th>
+                                                <th class="py-2 font-semibold">Holdout RMSE</th>
+                                                <th class="py-2 font-semibold">Directional Hit Rate</th>
+                                                <th class="py-2 font-semibold">vs Baseline</th>
+                                                <th class="py-2 font-semibold text-right">Selection Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="forecast-benchmark-tbody" class="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+                                            <!-- Populated dynamically -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- News Evidence Citation Grid -->
+                            <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray mb-2.5 flex items-center gap-1.5">
+                                    <i data-lucide="newspaper" class="w-3.5 h-3.5 text-apple-blue"></i> News Evidence Grounding & Sentiment Inputs
+                                </h4>
+                                <div id="forecast-news-evidence" class="space-y-2 text-xs">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Mandatory Regulatory / Quantitative Disclaimer -->
+                            <div class="p-3.5 rounded-xl bg-amber-500/5 dark:bg-amber-400/5 border border-amber-500/20 text-[11px] leading-relaxed text-amber-900/80 dark:text-amber-200/80">
+                                <strong class="font-semibold text-amber-900 dark:text-amber-200">Statistical Disclaimer:</strong>
+                                Forecasts represent approximate, empirical distributions trained on historical point-in-time data. Financial asset returns are stochastic, subject to regime shifts, and inherently uncertain. These outputs do not constitute investment advice, trading instructions, or a guarantee of future price performance.
+                            </div>
+                        </div>
+
                         <!-- Fundamentals -->
                         <div id="tab-fundamentals" class="tab-content hidden animate-fade-in">
                             <p id="fundamental-source-status" class="mb-3 text-xs text-apple-gray" role="status"></p>
@@ -295,98 +811,216 @@
                 </div>
             </div>
 
-            <!-- Right Chat Panel -->
-            <div id="chat-panel" class="w-full glass-sidebar flex flex-col shrink-0 z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.05)] transform transition-transform duration-300 absolute right-0 h-full border-l border-black/10 dark:border-white/10 hidden">
+            <!-- AI Chat Workspace (First-Class Clean View) -->
+            <div id="ai-view" class="flex-1 flex flex-col h-full overflow-hidden bg-apple-bg dark:bg-apple-dark-bg relative hidden">
                 
-                <div class="h-16 border-b border-black/10 dark:border-white/10 flex items-center justify-between px-6 shrink-0 bg-white/50 dark:bg-black/50 backdrop-blur-md">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full flex items-center justify-center text-white bg-gradient-to-tr from-blue-600 to-blue-400 shadow-md">
-                            <i data-lucide="sparkles" class="w-4 h-4"></i>
-                        </div>
-                        <div>
-                            <span class="text-sm font-bold tracking-tight block">Intelligence Engine</span>
-                            <span class="text-[10px] text-apple-gray flex items-center gap-1" id="chat-engine-status"><div class="w-1.5 h-1.5 rounded-full bg-gray-400"></div> Checking local services…</span>
-                        </div>
-                    </div>
-                    <div class="chat-header-actions" role="group" aria-label="Chat controls">
-                        <button type="button" id="chat-system-status" class="chat-system-status" aria-haspopup="dialog" aria-expanded="false" aria-controls="system-status-popover" onclick="toggleSystemStatus()" title="Open project status details">
-                            <span class="status-dot" aria-hidden="true"></span><i data-lucide="activity" class="h-4 w-4"></i><span id="chat-system-status-label">Checking</span>
+                <!-- Sleek AI Chat Sub-Header (Clean, minimal context bar) -->
+                <div id="chat-sub-header" class="h-11 border-b border-black/[0.05] dark:border-white/[0.05] bg-white/60 dark:bg-[#1c1c1f]/65 backdrop-blur-xl flex items-center justify-between px-3 sm:px-6 shrink-0 z-20 gap-3">
+                    <!-- Left: Active Title & Sidebar Expand Toggle (when sidebar collapsed) -->
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                        <!-- Sidebar Expand Toggle (Only visible when sidebar is collapsed) -->
+                        <button id="sidebar-expand-btn" type="button" onclick="toggleSidebar(true)" class="hidden w-7 h-7 rounded-lg flex items-center justify-center text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 transition-colors shrink-0" title="Open chat history panel" aria-label="Open chat history">
+                            <i data-lucide="panel-left" class="w-4 h-4"></i>
                         </button>
-                        <button class="chat-history-toggle flex h-10 w-10 items-center justify-center rounded-lg hover:bg-black/5" title="Conversation history" aria-label="Conversation history" onclick="toggleChatHistory()"><i data-lucide="panel-left" class="w-4 h-4"></i></button>
-                        <button class="chat-new-button flex h-10 w-10 items-center justify-center rounded-lg hover:bg-black/5" title="Start a new conversation" aria-label="Start a new conversation" onclick="resetChatSession()"><i data-lucide="square-pen" class="w-4 h-4"></i></button>
-                        <button type="button" class="chat-page-menu-trigger inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-semibold hover:bg-black/5" aria-label="Go to another page" aria-haspopup="menu" aria-expanded="false" onclick="toggleChatPageMenu()"><i data-lucide="layout-dashboard" class="h-4 w-4"></i><span>Pages</span><i data-lucide="chevron-down" class="h-3 w-3"></i></button>
-                        <button class="chat-close inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 transition hover:bg-black/5" title="Exit chat and return to markets" aria-label="Exit chat and return to markets" onclick="showView('dashboard')"><i data-lucide="arrow-left" class="h-4 w-4"></i><span>Exit chat</span></button>
-                        <div id="chat-page-menu" class="chat-page-menu hidden" role="menu" aria-label="App pages">
-                            <button type="button" role="menuitem" onclick="navigateFromChat('dashboard')"><i data-lucide="house"></i><span>Markets</span></button>
-                            <button type="button" role="menuitem" onclick="navigateFromChat('watchlist')"><i data-lucide="star"></i><span>Watchlist</span></button>
-                            <button type="button" role="menuitem" onclick="navigateFromChat('news')"><i data-lucide="newspaper"></i><span>News feed</span></button>
-                            <button type="button" role="menuitem" onclick="navigateFromChat('compare')"><i data-lucide="chart-line"></i><span>Compare</span></button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Chat Messages -->
-                <div class="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth" id="chat-messages">
-                    <div class="flex flex-col gap-1 items-start max-w-[95%] animate-fade-in">
-                        <div class="chat-bubble-ai p-4 text-sm leading-relaxed prose dark:prose-invert max-w-none shadow-sm">
-                            <p class="m-0 font-medium">Your research workspace</p>
-                            <p class="text-apple-gray mt-2 text-xs">Ask about provider-backed market data, technical indicators, recent news, uploaded documents, or a comparison. I’ll show the sources and note when evidence is limited.</p>
-                            <div class="chat-starters mt-4 grid gap-2"><button onclick="startSuggestedChat('Analyze the latest available market data and technical indicators for ' + (currentSymbol || 'AAPL') + '.')">Analyze <span class="starter-symbol">AAPL</span> with available market data</button><button onclick="startSuggestedChat('What recent news is available for ' + (currentSymbol || 'AAPL') + '? Cite the sources.')">Find recent company news</button></div>
+
+                        <!-- Active Conversation Title with inline edit -->
+                        <div class="flex items-center gap-2 min-w-0 max-w-[320px] sm:max-w-[480px] md:max-w-[620px]" id="chat-title-container">
+                            <span id="chat-active-title" class="text-xs sm:text-[13px] font-semibold truncate text-gray-900 dark:text-gray-100 cursor-pointer hover:text-apple-blue transition-colors" title="Click to rename conversation" onclick="startHeaderRename()">New conversation</span>
+                            <span id="chat-active-branch-badge" class="chat-branch-tag hidden text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-bold shrink-0" title="This is a branched conversation">
+                                <i data-lucide="git-branch" class="w-2.5 h-2.5 inline mr-0.5"></i>Branch
+                            </span>
+                            <button type="button" class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-apple-gray hover:text-gray-700 dark:hover:text-gray-200 transition-colors shrink-0" title="Rename conversation" onclick="startHeaderRename()">
+                                <i data-lucide="pencil" class="w-3 h-3"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Chat Input Area -->
-                <div class="p-4 pt-2 shrink-0 bg-white/50 dark:bg-black/50 backdrop-blur-xl border-t border-black/5 dark:border-white/5">
-                    <div class="mb-2 flex min-h-11 items-center justify-between gap-2">
-                        <div class="flex min-w-0 items-center gap-2">
-                            <label for="chat-model-select" class="shrink-0 text-xs font-semibold text-apple-gray">Model</label>
-                            <select id="chat-model-select" aria-label="Chat model" onchange="switchChatModel(this.value)" class="min-h-11 max-w-[min(62vw,18rem)] rounded-xl border border-black/10 bg-white/70 px-3 text-sm dark:bg-black/20"><option>Checking local models…</option></select>
+                <!-- Chat Message Stream (Centered Scrollable Area) -->
+                <div id="chat-messages" class="flex-1 overflow-y-auto scroll-smooth px-4 sm:px-6 py-6 w-full chat-messages-area">
+                    <div class="max-w-3xl mx-auto w-full flex flex-col gap-6 pb-6" id="chat-messages-container">
+                        <!-- Welcome message / empty starter -->
+                        <div id="chat-welcome-box" class="flex gap-4 items-start max-w-full animate-slide-up">
+                            <div class="w-8 h-8 rounded-full border border-black/10 dark:border-white/10 flex-shrink-0 flex items-center justify-center bg-white dark:bg-[#202022] mt-1 shadow-sm">
+                                <i data-lucide="sparkles" class="w-4 h-4 text-apple-blue"></i>
+                            </div>
+                            <div class="text-[15px] prose prose-sm dark:prose-invert prose-p:leading-relaxed prose-a:text-apple-blue w-full max-w-[85%] min-w-0 break-words pt-1.5">
+                                <h3 class="m-0 text-base font-semibold">Intelligence Engine Workspace</h3>
+                                <p class="text-gray-500 dark:text-gray-400 mt-2">Ask questions, generate and review code, analyze market data and indicators, ingest documents, or search recent web coverage. Verified sources will be cited.</p>
+                                <div class="chat-starters mt-4 grid sm:grid-cols-2 gap-2">
+                                    <button type="button" class="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-left font-medium text-[13px]" onclick="startSuggestedChat('Analyze the latest available market data and technical indicators for ' + (currentSymbol || 'AAPL') + '.')">
+                                        Analyze <span class="starter-symbol font-bold text-apple-blue">AAPL</span> data
+                                    </button>
+                                    <button type="button" class="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-left font-medium text-[13px]" onclick="startSuggestedChat('What recent market news is available for ' + (currentSymbol || 'AAPL') + '? Cite all sources.')">
+                                        Find company news &amp; sources
+                                    </button>
+                                    <button type="button" class="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-left font-medium text-[13px]" onclick="startSuggestedChat('Write a Python function to calculate the Sharpe Ratio and Maximum Drawdown of a portfolio.')">
+                                        <i data-lucide="code" class="w-3.5 h-3.5 text-apple-blue shrink-0"></i>
+                                        Calculate Sharpe Ratio in Python
+                                    </button>
+                                    <button type="button" class="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-left font-medium text-[13px]" onclick="startSuggestedChat('Explain how dividend yields and payout ratios impact long-term stock valuation.')">
+                                        <i data-lucide="book-open" class="w-3.5 h-3.5 text-apple-blue shrink-0"></i>
+                                        Dividend yields &amp; valuation
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="flex min-w-0 items-center gap-2"><span id="chat-model-status" class="truncate text-xs text-apple-gray" role="status"></span><button type="button" onclick="toggleModal('settings-modal')" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-black/10 hover:border-apple-blue hover:text-apple-blue dark:border-white/10" aria-label="Chat model parameters and settings" title="Model parameters and chat settings"><i data-lucide="sliders-horizontal" class="h-4 w-4"></i></button></div>
                     </div>
-                    <div id="chat-attachments" class="mb-2 flex flex-wrap gap-2" aria-live="polite"></div>
-                    <input id="chat-file-upload" type="file" class="hidden" accept=".pdf,.docx,.txt,.html,.htm,.csv,.xlsx,.xls" onchange="uploadChatFile()">
-                    <div class="relative flex items-end">
-                        <textarea id="chat-input" 
-                                  class="w-full bg-white dark:bg-[#2C2C2E] border border-black/10 dark:border-white/10 rounded-[24px] pl-5 pr-28 py-3.5 text-sm focus:outline-none input-glow resize-none shadow-sm transition-all" 
-                                  style="min-height: 52px; max-height: 150px; line-height: 1.4;"
-                                  placeholder="Ask about AAPL, upload docs, or analyze..." 
-                                  rows="1"
-                                  onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChatMessage(); }"></textarea>
+                </div>
+
+                <!-- Floating Sticky Composer Area -->
+                <div class="w-full pb-4 sm:pb-5 pt-2 shrink-0 sticky bottom-0 z-20 bg-gradient-to-t from-apple-bg dark:from-apple-dark-bg via-apple-bg/90 dark:via-apple-dark-bg/90 to-transparent flex justify-center px-4 pointer-events-auto">
+                    <div class="max-w-3xl w-full relative flex flex-col">
                         
-                        <button type="button" onclick="document.getElementById('chat-file-upload').click()" class="absolute right-14 bottom-1.5 flex h-11 w-11 items-center justify-center rounded-full text-apple-gray hover:bg-black/5 hover:text-apple-blue" aria-label="Attach a document or dataset" title="Attach PDF, Word, text, HTML, or dataset"><i data-lucide="paperclip" class="h-5 w-5"></i></button>
-                        <button onclick="sendChatMessage()" aria-label="Send message" class="absolute right-2 bottom-1.5 flex h-11 w-11 items-center justify-center rounded-full bg-apple-blue text-white hover:bg-blue-600 transition-colors shadow-md transform hover:scale-105 active:scale-95">
-                            <i data-lucide="arrow-up" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    <div class="text-[10px] text-center mt-3 text-apple-gray flex justify-center items-center gap-1 chat-disclaimer">
-                        <i data-lucide="shield-check" class="w-3 h-3"></i> Local AI model. Market and web data use external providers. Verify important decisions.
+                        <!-- Attachments Chips Bar -->
+                        <div id="chat-attachments" class="flex flex-wrap gap-2 mb-2 w-full" aria-live="polite"></div>
+                        <input id="chat-file-upload" type="file" class="hidden" accept=".pdf,.docx,.txt,.html,.htm,.csv,.xlsx,.xls" onchange="uploadChatFile()">
+
+                        <!-- Main Composer Box -->
+                        <div class="flex flex-col bg-white/95 dark:bg-[#252528]/95 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-3xl p-2 shadow-2xl focus-within:ring-2 focus-within:ring-apple-blue/30 transition-all duration-200">
+                            
+                            <div class="flex items-end gap-2 px-1 relative">
+                                <button type="button" onclick="document.getElementById('chat-file-upload').click()" class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 transition-colors shrink-0 mb-1" aria-label="Attach document or dataset" title="Attach PDF, Word, text, HTML, or CSV">
+                                    <i data-lucide="paperclip" class="h-4 w-4"></i>
+                                </button>
+                                
+                                <textarea id="chat-input" 
+                                          class="flex-1 max-h-[200px] min-h-[44px] bg-transparent border-0 outline-none resize-none py-2.5 px-2 text-[14.5px] text-gray-900 dark:text-gray-100 placeholder:text-gray-400 leading-relaxed custom-scrollbar" 
+                                          placeholder="Message Intelligence Engine..." 
+                                          rows="1"
+                                          onkeydown="if(event.key === 'Enter' &amp;&amp; !event.shiftKey) { event.preventDefault(); sendChatMessage(); }"></textarea>
+                                
+                                <!-- Send or Stop Button -->
+                                <button id="chat-send-btn" onclick="handleSendOrStop()" aria-label="Send message" class="p-2 rounded-full bg-apple-blue text-white hover:bg-blue-600 transition-all disabled:opacity-50 mb-1 flex items-center justify-center shrink-0 w-9 h-9 shadow-md shadow-blue-500/20 active:scale-95" title="Send message">
+                                    <i data-lucide="arrow-up" class="h-4 w-4" id="chat-send-icon"></i>
+                                </button>
+                            </div>
+
+                            <!-- Sleek Unified Bottom Toolbar in Composer -->
+                            <div class="flex flex-wrap items-center justify-between px-2 pt-1.5 pb-0.5 gap-2 border-t border-black/5 dark:border-white/5 mt-1 text-xs">
+                                <div class="flex items-center gap-2 min-w-0 flex-wrap">
+                                    <!-- Authoritative Mode Switcher (General vs Market RAG) -->
+                                    <div class="chat-mode-toggle flex items-center bg-black/5 dark:bg-white/5 p-0.5 rounded-xl border border-black/10 dark:border-white/10 text-xs font-semibold shrink-0" title="Switch AI Mode" role="group" aria-label="AI Mode">
+                                        <button type="button" id="chat-mode-general-btn" class="chat-mode-btn px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 active text-apple-blue font-bold bg-white dark:bg-[#2c2c2e] shadow-sm text-xs" onclick="setChatMode('general')" title="General AI: Coding, reasoning, natural discussion">
+                                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-500"></i>
+                                            <span>General</span>
+                                        </button>
+                                        <button type="button" id="chat-mode-market-btn" class="chat-mode-btn px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-xs" onclick="setChatMode('auto')" title="Market RAG: Live stock data, financial analysis, technical indicators & citations">
+                                            <i data-lucide="trending-up" class="w-3.5 h-3.5 text-apple-blue"></i>
+                                            <span>Market RAG</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Authoritative Model Selector -->
+                                    <div class="relative flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer text-gray-700 dark:text-gray-200 border border-black/5 dark:border-white/10 shrink-0" id="chat-model-selector-wrap" title="Switch active Ollama model">
+                                        <i data-lucide="cpu" class="w-3.5 h-3.5 text-apple-blue shrink-0"></i>
+                                        <span id="chat-model-display" class="font-semibold text-xs tracking-tight max-w-[130px] truncate">gemma3:1b</span>
+                                        <i data-lucide="chevrons-up-down" class="w-3 h-3 text-apple-gray shrink-0"></i>
+                                        <select id="chat-model-select" aria-label="Chat model" onchange="switchChatModel(this.value)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full text-xs">
+                                        </select>
+                                    </div>
+
+                                    <!-- Authoritative Web Crawl Toggle -->
+                                    <button type="button" id="composer-web-crawl-toggle" onclick="toggleWebCrawl()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 font-semibold transition-colors border border-blue-500/20 shrink-0" title="Toggle real web search and crawling">
+                                        <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+                                        <span id="composer-web-crawl-label">Web: On</span>
+                                    </button>
+
+                                    <!-- Temperature & Presets Pill -->
+                                    <button type="button" id="composer-temp-pill" onclick="toggleParametersPopover()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/5 font-semibold transition-colors border border-black/5 dark:border-white/10 shrink-0" title="Temperature & Generation Presets">
+                                        <i data-lucide="thermometer" class="w-3.5 h-3.5 text-apple-blue"></i>
+                                        <span id="composer-temp-val">0.70</span>
+                                        <span id="composer-temp-label" class="text-[11px] text-apple-gray font-normal hidden sm:inline">(Balanced)</span>
+                                    </button>
+                                </div>
+                                
+                                <div class="flex items-center gap-2 ml-auto">
+                                    <!-- Generation Parameters Popover Button -->
+                                    <button type="button" id="composer-params-btn" onclick="toggleParametersPopover()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 transition-colors font-semibold text-xs" title="Configure Temperature, Max Tokens, Top-P">
+                                        <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+                                        <span class="hidden sm:inline">Advanced</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="text-[11px] text-center text-apple-gray mt-2">
+                            AI can make mistakes. Verify important financial or technical decisions.
+                        </p>
                     </div>
                 </div>
             </div>
+
             
         </div>
     </main>
+    </div>
 
-    <nav class="bottom-app-nav" aria-label="Main navigation">
-        <button type="button" class="nav-item" data-route="dashboard" onclick="showView('dashboard')" aria-label="Markets home" title="Markets"><i data-lucide="house"></i><span>Markets</span></button>
-        <button type="button" class="nav-item" data-route="watchlist" onclick="showView('watchlist')" aria-label="Watchlist" title="Watchlist"><i data-lucide="star"></i><span>Watchlist</span></button>
-        <button type="button" class="nav-item" data-route="news" onclick="showView('news')" aria-label="News" title="News"><i data-lucide="newspaper"></i><span>News</span></button>
-        <button type="button" class="nav-item" data-route="compare" onclick="showView('compare')" aria-label="Compare markets" title="Compare markets"><i data-lucide="chart-line"></i><span>Compare</span></button>
-        <button type="button" class="nav-item" data-route="ai" onclick="focusChat()" aria-label="AI research" title="AI research"><i data-lucide="sparkles"></i><span>AI</span></button>
-        <button type="button" class="nav-item" onclick="toggleMoreMenu()" aria-label="More tools" title="More tools"><i data-lucide="ellipsis"></i><span>More</span></button>
-        <div id="more-menu" class="more-menu hidden" role="menu" aria-label="More tools">
-            <button type="button" role="menuitem" onclick="toggleMoreMenu();focusSearch()"><i data-lucide="search"></i> Search a stock</button>
-            <button type="button" role="menuitem" onclick="toggleMoreMenu();toggleModal('docs-modal')"><i data-lucide="database"></i> Data hub</button>
-            <button type="button" role="menuitem" onclick="toggleMoreMenu();toggleModal('settings-modal')"><i data-lucide="settings"></i> Settings</button>
+    <!-- Enhanced System & AI Diagnostic Popover -->
+    <section id="system-status-popover" 
+             class="system-status-popover hidden fixed z-50 top-[60px] sm:top-[68px] right-3 sm:right-6 w-[430px] max-w-[calc(100vw-24px)] rounded-2xl border border-black/10 dark:border-white/10 bg-white/95 dark:bg-[#1a1a1d]/95 backdrop-blur-2xl shadow-2xl p-4 sm:p-5 flex flex-col max-h-[min(84vh,660px)] overflow-hidden animate-fade-in text-xs" 
+             role="dialog" 
+             aria-labelledby="system-status-title" 
+             aria-modal="false">
+        
+        <!-- Popover Header -->
+        <header class="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/5 shrink-0">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-apple-blue/10 text-apple-blue flex items-center justify-center shrink-0">
+                    <i data-lucide="activity" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <h2 id="system-status-title" class="text-sm font-bold text-gray-900 dark:text-gray-100">
+                        System &amp; AI Health
+                    </h2>
+                    <p id="system-status-last-checked" class="text-[10px] text-apple-gray font-medium">Checking local services…</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1">
+                <button type="button" 
+                        id="system-status-refresh-btn"
+                        class="w-8 h-8 rounded-lg text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-center justify-center cursor-pointer" 
+                        onclick="checkHealth(true)" 
+                        aria-label="Refresh project status" 
+                        title="Re-run health check">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                </button>
+                <button type="button" 
+                        id="system-status-close" 
+                        class="w-8 h-8 rounded-lg text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-center justify-center cursor-pointer" 
+                        onclick="toggleSystemStatus(false)" 
+                        aria-label="Close project status">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Dynamic Overall Status Banner -->
+        <div id="system-status-banner" class="my-3 p-3 rounded-xl border flex items-start gap-2.5 shrink-0 transition-colors">
+            <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0 mt-0.5" id="system-status-banner-icon"></i>
+            <div class="flex-1 min-w-0">
+                <span id="system-status-banner-title" class="text-xs font-bold block">Status Summary</span>
+                <p id="system-status-summary" class="text-[11px] mt-0.5 leading-relaxed">
+                    Checking service readiness…
+                </p>
+            </div>
         </div>
-    </nav>
 
-    <section id="system-status-popover" class="system-status-popover hidden" role="dialog" aria-labelledby="system-status-title" aria-modal="false">
-        <header class="flex items-start justify-between gap-3"><div><h2 id="system-status-title" class="text-sm font-bold">Project status</h2><p id="system-status-summary" class="mt-1 text-xs text-apple-gray">Checking services…</p></div><div class="flex items-center gap-1"><button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-black/5" onclick="checkHealth()" aria-label="Refresh project status" title="Refresh"><i data-lucide="refresh-cw" class="h-4 w-4"></i></button><button type="button" id="system-status-close" class="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-black/5" onclick="toggleSystemStatus(false)" aria-label="Close project status"><i data-lucide="x" class="h-4 w-4"></i></button></div></header>
-        <div id="system-status-details" class="mt-3 space-y-1" aria-live="polite"><p class="text-xs text-apple-gray">Service details are loading.</p></div>
-        <p class="mt-3 border-t border-black/5 pt-2 text-[10px] text-apple-gray dark:border-white/10">Status is checked from this app’s local API. Market providers can be delayed or unavailable.</p>
+        <!-- Scrollable Service Cards List -->
+        <div id="system-status-details" class="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar min-h-0" aria-live="polite">
+            <p class="text-xs text-apple-gray py-4 text-center">Service details are loading…</p>
+        </div>
+
+        <!-- Popover Footer -->
+        <div class="mt-3 pt-2.5 border-t border-black/5 dark:border-white/5 shrink-0 flex items-center justify-between text-[11px] text-apple-gray">
+            <span class="flex items-center gap-1.5 text-[10px]">
+                <span class="w-1.5 h-1.5 rounded-full bg-apple-blue"></span>
+                <span>Auto-checks every 30s</span>
+            </span>
+            <button type="button" onclick="toggleModal('settings-modal'); toggleSystemStatus(false);" class="text-apple-blue hover:underline font-semibold text-[11px] cursor-pointer">
+                Configure Models &amp; Providers →
+            </button>
+        </div>
     </section>
     <div id="delete-chat-dialog" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/35 p-4 backdrop-blur-sm" role="presentation" onclick="if(event.target===this) closeDeleteChatDialog()">
         <section class="delete-chat-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-chat-title" aria-describedby="delete-chat-description">
@@ -398,8 +1032,192 @@
         </section>
     </div>
 
+    <!-- Advanced Generation & AI Parameters Modal Dialog -->
+    <div id="parameters-popover" 
+         class="fixed inset-0 z-[120] hidden items-center justify-center bg-black/45 backdrop-blur-md p-3 sm:p-4 transition-all duration-200" 
+         role="dialog" 
+         aria-labelledby="parameters-dialog-title" 
+         aria-modal="true"
+         onclick="if(event.target === this) toggleParametersPopover(false)">
+        
+        <div class="relative w-full max-w-lg bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[min(90vh,680px)] overflow-hidden text-xs" 
+             onclick="event.stopPropagation()">
+            
+            <!-- Modal Header (Always visible, cannot be pushed off-screen) -->
+            <div class="px-5 sm:px-6 py-4 border-b border-black/5 dark:border-white/5 flex items-center justify-between shrink-0 bg-white/40 dark:bg-black/20">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#0071e3] to-[#38bdf8] text-white flex items-center justify-center shadow-sm shadow-blue-500/25 shrink-0">
+                        <i data-lucide="sliders-horizontal" class="w-4 h-4 sm:w-4.5 sm:h-4.5"></i>
+                    </div>
+                    <div>
+                        <h2 id="parameters-dialog-title" class="text-sm sm:text-base font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                            Generation &amp; AI Parameters
+                        </h2>
+                        <p class="text-[11px] text-apple-gray">Fine-tune temperature, response tokens, model &amp; custom persona</p>
+                    </div>
+                </div>
+                <button type="button" 
+                        onclick="toggleParametersPopover(false)" 
+                        class="w-8 h-8 rounded-full text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 hover:bg-black/5 dark:hover:bg-white/10 transition-colors flex items-center justify-center cursor-pointer" 
+                        aria-label="Close parameters" 
+                        title="Close (Esc)">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Scrollable Content Body -->
+            <div class="overflow-y-auto px-5 sm:px-6 py-4 space-y-4 custom-scrollbar flex-1 min-h-0">
+                
+                <!-- 1. Quick Presets (1-Click Optimization) -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-[11px] font-bold uppercase tracking-wider text-apple-gray">Quick Presets</label>
+                        <span class="text-[10px] text-apple-gray">1-click optimization</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button type="button" id="preset-precise-btn" onclick="applyParameterPreset('precise')" class="px-2.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 hover:border-apple-blue font-semibold text-xs transition-all text-center flex flex-col items-center gap-0.5 group cursor-pointer">
+                            <span class="font-bold text-gray-900 dark:text-gray-100 group-hover:text-apple-blue">🎯 Precise</span>
+                            <span class="text-[10px] text-apple-gray">0.20 · Exact facts</span>
+                        </button>
+                        <button type="button" id="preset-balanced-btn" onclick="applyParameterPreset('balanced')" class="px-2.5 py-2.5 rounded-xl border border-apple-blue bg-apple-blue/10 text-apple-blue font-semibold text-xs transition-all text-center flex flex-col items-center gap-0.5 cursor-pointer">
+                            <span class="font-bold">⚖️ Balanced</span>
+                            <span class="text-[10px] opacity-80">0.70 · Analytical</span>
+                        </button>
+                        <button type="button" id="preset-creative-btn" onclick="applyParameterPreset('creative')" class="px-2.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 hover:border-apple-blue font-semibold text-xs transition-all text-center flex flex-col items-center gap-0.5 group cursor-pointer">
+                            <span class="font-bold text-gray-900 dark:text-gray-100 group-hover:text-apple-blue">🎨 Creative</span>
+                            <span class="text-[10px] text-apple-gray">1.00 · Exploratory</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. Active Model Selector -->
+                <div class="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label for="param-model-select" class="text-[11px] font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                            <i data-lucide="cpu" class="w-3.5 h-3.5 text-apple-blue"></i>
+                            Active Ollama Model
+                        </label>
+                        <span id="param-model-count" class="text-[10px] text-apple-gray">Installed local weights</span>
+                    </div>
+                    <select id="param-model-select" onchange="onParamModelSelectChange(this.value)" class="w-full bg-white dark:bg-[#252528] border border-black/10 dark:border-white/10 rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-apple-blue/30 text-gray-900 dark:text-gray-100 cursor-pointer">
+                    </select>
+                </div>
+
+                <!-- 3. Fine-Tuning Sliders -->
+                <div class="space-y-3 pt-0.5">
+                    <!-- Temperature -->
+                    <div class="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/5 dark:border-white/5">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div>
+                                <label for="param-temp" class="text-xs font-bold text-gray-800 dark:text-gray-200 block">Temperature</label>
+                                <span class="text-[10px] text-apple-gray">Controls randomness and analytical focus</span>
+                            </div>
+                            <span id="param-temp-val" class="font-mono text-apple-blue font-bold px-2 py-0.5 rounded-md bg-apple-blue/10 text-xs">0.70</span>
+                        </div>
+                        <input type="range" id="param-temp" min="0.0" max="1.5" step="0.05" value="0.70" oninput="onParameterSliderChange('temp', this.value)" class="w-full accent-apple-blue cursor-pointer">
+                        <div class="flex justify-between text-[10px] text-apple-gray mt-1">
+                            <span>0.0 (Deterministic)</span>
+                            <span>0.7 (Standard)</span>
+                            <span>1.5 (High Variance)</span>
+                        </div>
+                    </div>
+
+                    <!-- Max Tokens -->
+                    <div class="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/5 dark:border-white/5">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div>
+                                <label for="param-max-tokens" class="text-xs font-bold text-gray-800 dark:text-gray-200 block">Max Output Tokens</label>
+                                <span class="text-[10px] text-apple-gray">Maximum response length</span>
+                            </div>
+                            <span id="param-max-tokens-val" class="font-mono text-apple-blue font-bold px-2 py-0.5 rounded-md bg-apple-blue/10 text-xs">2048</span>
+                        </div>
+                        <input type="range" id="param-max-tokens" min="256" max="4096" step="128" value="2048" oninput="onParameterSliderChange('max-tokens', this.value)" class="w-full accent-apple-blue cursor-pointer">
+                        <div class="flex items-center justify-between mt-2">
+                            <div class="flex gap-1.5">
+                                <button type="button" onclick="setTokenValue(1024)" class="px-2 py-0.5 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-[10px] font-semibold text-apple-gray hover:text-apple-blue transition-colors cursor-pointer">1024</button>
+                                <button type="button" onclick="setTokenValue(2048)" class="px-2 py-0.5 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-[10px] font-semibold text-apple-gray hover:text-apple-blue transition-colors cursor-pointer">2048</button>
+                                <button type="button" onclick="setTokenValue(4096)" class="px-2 py-0.5 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-[10px] font-semibold text-apple-gray hover:text-apple-blue transition-colors cursor-pointer">4096</button>
+                            </div>
+                            <span class="text-[10px] text-apple-gray">256 – 4096 tokens</span>
+                        </div>
+                    </div>
+
+                    <!-- Top-P -->
+                    <div class="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/5 dark:border-white/5">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div>
+                                <label for="param-top-p" class="text-xs font-bold text-gray-800 dark:text-gray-200 block">Top-P (Nucleus Sampling)</label>
+                                <span class="text-[10px] text-apple-gray">Cumulative probability cutoff</span>
+                            </div>
+                            <span id="param-top-p-val" class="font-mono text-apple-blue font-bold px-2 py-0.5 rounded-md bg-apple-blue/10 text-xs">0.90</span>
+                        </div>
+                        <input type="range" id="param-top-p" min="0.1" max="1.0" step="0.05" value="0.90" oninput="onParameterSliderChange('top-p', this.value)" class="w-full accent-apple-blue cursor-pointer">
+                        <div class="flex justify-between text-[10px] text-apple-gray mt-1">
+                            <span>0.1 (Focused)</span>
+                            <span>0.9 (Standard)</span>
+                            <span>1.0 (Full Vocabulary)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Live Web Research Toggle -->
+                <div class="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 flex items-center justify-between">
+                    <div class="pr-2">
+                        <span class="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5 text-xs">
+                            <i data-lucide="globe" class="w-3.5 h-3.5 text-blue-500"></i>
+                            Live Web Research
+                        </span>
+                        <p class="text-[10px] text-apple-gray mt-0.5">Crawl Google News RSS &amp; live financial web pages for fresh real-time facts</p>
+                    </div>
+                    <button type="button" id="panel-web-crawl-toggle" onclick="toggleWebCrawl()" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 active:scale-95 cursor-pointer">
+                        ON
+                    </button>
+                </div>
+
+                <!-- 5. Custom Persona / Instruction -->
+                <div class="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label for="param-custom-persona" class="text-xs font-bold text-gray-800 dark:text-gray-200 block">Custom Persona / System Instructions</label>
+                            <span class="text-[10px] text-apple-gray">Optional guidance for model tone, depth, or formatting</span>
+                        </div>
+                        <button type="button" onclick="document.getElementById('param-custom-persona').value = '';" class="text-[10px] text-apple-gray hover:text-red-500 transition-colors font-semibold cursor-pointer">Clear</button>
+                    </div>
+                    <textarea id="param-custom-persona" rows="3" class="w-full bg-white dark:bg-[#252528] border border-black/10 dark:border-white/10 rounded-xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-apple-blue/30 resize-none leading-relaxed placeholder:text-gray-400 text-gray-900 dark:text-gray-100 custom-scrollbar" placeholder="e.g. Act as a senior Wall Street quantitative equity researcher. Deliver concise bullet points, direct metric calculations, and cite valuation evidence."></textarea>
+                    
+                    <!-- Quick Persona Preset Chips -->
+                    <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span class="text-[10px] text-apple-gray mr-0.5 font-medium">Presets:</span>
+                        <button type="button" onclick="insertPersonaPreset('quant')" class="px-2 py-0.5 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-apple-blue/10 hover:text-apple-blue text-[10px] font-medium transition-colors cursor-pointer">📊 Quant Analyst</button>
+                        <button type="button" onclick="insertPersonaPreset('concise')" class="px-2 py-0.5 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-apple-blue/10 hover:text-apple-blue text-[10px] font-medium transition-colors cursor-pointer">⚡ Concise Direct</button>
+                        <button type="button" onclick="insertPersonaPreset('deep')" class="px-2 py-0.5 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-apple-blue/10 hover:text-apple-blue text-[10px] font-medium transition-colors cursor-pointer">🧠 Deep Reasoner</button>
+                        <button type="button" onclick="insertPersonaPreset('code')" class="px-2 py-0.5 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-apple-blue/10 hover:text-apple-blue text-[10px] font-medium transition-colors cursor-pointer">💻 Code &amp; Formulas</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer (Always visible, sticky at bottom) -->
+            <div class="px-5 sm:px-6 py-3.5 border-t border-black/5 dark:border-white/5 flex items-center justify-between shrink-0 bg-white/40 dark:bg-black/20">
+                <button type="button" onclick="resetDefaultParameters()" class="text-xs text-apple-gray hover:text-apple-blue font-semibold transition-colors flex items-center gap-1.5 py-1 cursor-pointer">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                    Reset defaults
+                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="toggleParametersPopover(false)" class="px-4 py-2 rounded-xl text-xs font-semibold text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="button" id="param-apply-btn" onclick="saveAndApplyParameters(); toggleParametersPopover(false);" class="px-5 py-2 rounded-xl bg-apple-blue text-white font-bold text-xs shadow-md shadow-blue-500/20 hover:bg-blue-600 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                        <span>Apply &amp; Save</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Global Loading Overlay -->
-    <div id="global-loading" class="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 opacity-0 pointer-events-none transition-opacity duration-300">
+    <div id="global-loading" class="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[110] opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="glass-panel p-6 rounded-2xl flex flex-col items-center shadow-2xl">
             <div class="w-8 h-8 border-4 border-apple-blue border-t-transparent rounded-full animate-spin mb-3"></div>
             <span class="text-sm font-semibold">Processing...</span>
@@ -408,7 +1226,7 @@
 
     <!-- Modals -->
     <!-- Settings Modal -->
-    <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50 opacity-0 pointer-events-none transition-opacity duration-300">
+    <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-[110] opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="glass-panel rounded-3xl w-full max-w-md mx-4 overflow-hidden transform scale-95 transition-all duration-300 shadow-2xl border border-white/20" id="settings-content">
             <div class="px-6 py-5 border-b border-black/10 dark:border-white/10 flex justify-between items-center bg-white/40 dark:bg-black/40">
                 <h3 class="text-lg font-bold tracking-tight">System Settings</h3>
@@ -430,6 +1248,41 @@
                         <input type="number" id="set-ctx" class="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow">
                     </div>
                 </div>
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-widest text-apple-gray mb-2">Max Tokens</label>
+                        <input type="number" id="set-max-tokens" class="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-widest text-apple-gray mb-2">Top-P</label>
+                        <input type="number" step="0.05" id="set-top-p" class="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-widest text-apple-gray mb-2">Top-K</label>
+                        <input type="number" id="set-top-k" class="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-widest text-apple-gray mb-2">Repeat Penalty</label>
+                        <input type="number" step="0.1" id="set-repeat-penalty" class="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-widest text-apple-gray mb-2">Seed</label>
+                        <input type="number" id="set-seed" class="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-widest text-apple-gray mb-2 flex items-center justify-between">
+                            <span>Streaming</span>
+                            <div class="relative inline-block w-8 h-4 transition duration-200 ease-in-out rounded-full bg-black/20 dark:bg-white/20">
+                                <input type="checkbox" id="set-streaming" class="peer absolute w-0 h-0 opacity-0">
+                                <span class="absolute left-0.5 top-0.5 bottom-0.5 w-3 rounded-full bg-white transition-all duration-200 peer-checked:translate-x-4 peer-checked:bg-apple-blue shadow"></span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
                 <div class="flex items-center justify-between pt-2">
                     <label class="text-sm font-semibold">Show Citations in Chat</label>
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -446,13 +1299,13 @@
     </div>
 
     <!-- Docs Modal (RAG Hub) -->
-    <div id="docs-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50 opacity-0 pointer-events-none transition-opacity duration-300">
+    <div id="docs-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-[110] opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="glass-panel rounded-3xl w-full max-w-lg mx-4 overflow-hidden transform scale-95 transition-all duration-300 shadow-2xl border border-white/20" id="docs-content">
             <div class="px-6 py-5 border-b border-black/10 dark:border-white/10 flex justify-between items-center bg-gradient-to-r from-blue-500/10 to-purple-500/10">
                 <h3 class="text-lg font-bold tracking-tight flex items-center gap-2"><i data-lucide="database" class="w-5 h-5 text-apple-blue"></i> Data Hub</h3>
                 <button onclick="toggleModal('docs-modal')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/10 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <div class="p-6 space-y-6">
+            <div class="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
                 <div>
                     <label class="block text-sm font-bold mb-3">Upload Documents (PDF, DOCX, TXT, HTML) or datasets (CSV, XLSX)</label>
                     <label class="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-black/20 dark:border-white/20 rounded-2xl cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-all group">
@@ -505,7 +1358,263 @@
         </div>
     </div>
 
+    <!-- Model Information & Diagnostics Modal -->
+    <div id="model-info-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="model-info-modal-title">
+        <div class="glass-panel w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 border border-black/10 dark:border-white/10 shadow-2xl space-y-5 animate-fade-in">
+            <div class="flex items-start justify-between gap-4 pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                        <i data-lucide="cpu" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 id="model-info-modal-title" class="text-base font-bold tracking-tight">StockAI Model Specification</h3>
+                            <span id="model-info-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase">Baseline</span>
+                        </div>
+                        <p id="model-info-category" class="text-xs text-apple-gray mt-0.5">Statistical & Quantitative Specification</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModelInfoModal()" class="p-1.5 rounded-xl text-apple-gray hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition" aria-label="Close modal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Model Availability & Hardware State Banner -->
+            <div id="model-info-availability-banner" class="p-3.5 rounded-2xl border text-xs leading-relaxed flex items-center justify-between gap-3 bg-emerald-500/10 border-emerald-500/20 text-emerald-900 dark:text-emerald-200">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0"></i>
+                    <span id="model-info-avail-text" class="font-semibold">Model Status: Ready (Calibrated & Verified)</span>
+                </div>
+                <span id="model-info-hw-profile" class="text-[11px] text-apple-gray font-mono">Pure CPU · <1ms Latency</span>
+            </div>
+
+            <!-- Methodology & Formula Card -->
+            <div class="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.06] space-y-2">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
+                    <i data-lucide="function-square" class="w-3.5 h-3.5 text-indigo-500"></i> Mathematical Formulation & Methodology
+                </h4>
+                <div id="model-info-formula" class="font-mono text-xs bg-black/5 dark:bg-black/40 p-2.5 rounded-xl text-indigo-600 dark:text-indigo-300 overflow-x-auto">
+                    Formula loading...
+                </div>
+                <p id="model-info-methodology" class="text-xs leading-relaxed text-gray-700 dark:text-gray-300">
+                    Methodology description...
+                </p>
+            </div>
+
+            <!-- Data Requirements & Features Used -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div class="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.06]">
+                    <h5 class="font-bold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-1.5">
+                        <i data-lucide="database" class="w-3.5 h-3.5 text-apple-blue"></i> Data Requirements
+                    </h5>
+                    <p id="model-info-data-req" class="text-apple-gray leading-relaxed">Minimum 55 historical trading bars required.</p>
+                </div>
+                <div class="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.06]">
+                    <h5 class="font-bold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-1.5">
+                        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-500"></i> Temporal Leakage Protocol
+                    </h5>
+                    <p id="model-info-leakage-protocol" class="text-apple-gray leading-relaxed">Purged embargo gap enforced during expanding-window cross validation.</p>
+                </div>
+            </div>
+
+            <!-- Strengths & Known Limitations -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div class="p-3.5 rounded-2xl bg-emerald-500/[0.03] border border-emerald-500/15">
+                    <h5 class="font-bold text-emerald-700 dark:text-emerald-300 mb-1 flex items-center gap-1.5">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i> Model Strengths
+                    </h5>
+                    <p id="model-info-strengths" class="text-gray-700 dark:text-gray-300 leading-relaxed"></p>
+                </div>
+                <div class="p-3.5 rounded-2xl bg-amber-500/[0.03] border border-amber-500/15">
+                    <h5 class="font-bold text-amber-700 dark:text-amber-300 mb-1 flex items-center gap-1.5">
+                        <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Known Limitations & Caveats
+                    </h5>
+                    <p id="model-info-limitations" class="text-gray-700 dark:text-gray-300 leading-relaxed"></p>
+                </div>
+            </div>
+
+            <div class="pt-2 flex justify-end">
+                <button type="button" onclick="closeModelInfoModal()" class="px-5 py-2 rounded-xl text-xs font-semibold bg-black dark:bg-white text-white dark:text-black hover:opacity-90 transition">
+                    Got it
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Health & Diagnostics Hub Modal -->
+    <div id="system-health-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="system-health-title">
+        <div class="glass-panel w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 border border-black/10 dark:border-white/10 shadow-2xl space-y-5 animate-fade-in">
+            <div class="flex items-start justify-between gap-4 pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                        <i data-lucide="activity" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 id="system-health-title" class="text-base font-bold tracking-tight">System Health & Diagnostic Hub</h3>
+                            <span id="system-health-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase">All Systems Verified</span>
+                        </div>
+                        <p class="text-xs text-apple-gray mt-0.5">Real-time hardware profiler, provider connectivity, and model availability registry</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeSystemHealthModal()" class="p-1.5 rounded-xl text-apple-gray hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition" aria-label="Close modal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Hardware Resource Profile Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div class="p-3 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.06]">
+                    <span class="text-apple-gray block text-[10px] uppercase font-bold">CPU Cores</span>
+                    <span id="hw-cpu-cores" class="text-sm font-bold text-gray-900 dark:text-gray-100 mt-0.5 block">--</span>
+                    <span id="hw-cpu-util" class="text-[10px] text-apple-gray">Usage: --%</span>
+                </div>
+                <div class="p-3 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.06]">
+                    <span class="text-apple-gray block text-[10px] uppercase font-bold">Available RAM</span>
+                    <span id="hw-ram-avail" class="text-sm font-bold text-gray-900 dark:text-gray-100 mt-0.5 block">-- GB</span>
+                    <span id="hw-ram-total" class="text-[10px] text-apple-gray">Total: -- GB</span>
+                </div>
+                <div class="p-3 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.06]">
+                    <span class="text-apple-gray block text-[10px] uppercase font-bold">GPU / Accelerator</span>
+                    <span id="hw-gpu-status" class="text-sm font-bold text-gray-900 dark:text-gray-100 mt-0.5 block">CPU Vectorized</span>
+                    <span class="text-[10px] text-apple-gray">SIMD Execution</span>
+                </div>
+                <div class="p-3 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.06]">
+                    <span class="text-apple-gray block text-[10px] uppercase font-bold">ML Dependencies</span>
+                    <span id="hw-dep-status" class="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block">All Verified</span>
+                    <span class="text-[10px] text-apple-gray">sklearn · numpy · pandas</span>
+                </div>
+            </div>
+
+            <!-- Connected Services Status -->
+            <div class="space-y-2 text-xs">
+                <h4 class="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                    <i data-lucide="radio" class="w-3.5 h-3.5 text-apple-blue"></i> External Service & Feed Connectivity
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]" id="service-health-grid">
+                    <div class="p-2.5 rounded-xl bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
+                        <span>Market Data Feed (yfinance)</span>
+                        <span class="px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Connected</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
+                        <span>Financial News Feeds (RSS)</span>
+                        <span class="px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Connected</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
+                        <span>Analyst Consensus Feed</span>
+                        <span class="px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Available</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
+                        <span>SQLite Forecast Audit Log</span>
+                        <span class="px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Persistent</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Registry Readiness Table -->
+            <div class="space-y-2 text-xs">
+                <h4 class="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                    <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-500"></i> Model Registry Readiness & Availability
+                </h4>
+                <div class="overflow-x-auto rounded-2xl border border-black/[0.05] dark:border-white/[0.06]">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="bg-black/[0.02] dark:bg-white/[0.02] border-b border-black/[0.05] dark:border-white/[0.06] text-apple-gray text-[11px]">
+                                <th class="py-2 px-3 font-semibold">Model Name</th>
+                                <th class="py-2 px-3 font-semibold">Type</th>
+                                <th class="py-2 px-3 font-semibold">Latency / Footprint</th>
+                                <th class="py-2 px-3 font-semibold text-right">State</th>
+                            </tr>
+                        </thead>
+                        <tbody id="system-health-model-table" class="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="pt-2 flex items-center justify-between">
+                <button type="button" onclick="triggerSystemRevalidate()" id="system-revalidate-btn" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 active:scale-95 transition flex items-center gap-1.5">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Revalidate & Clear Stale Cache
+                </button>
+                <button type="button" onclick="closeSystemHealthModal()" class="px-5 py-2 rounded-xl text-xs font-semibold bg-black dark:bg-white text-white dark:text-black hover:opacity-90 transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Model Testing Playground Modal -->
+    <div id="custom-model-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="custom-model-modal-title">
+        <div class="glass-panel w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 border border-black/10 dark:border-white/10 shadow-2xl space-y-5 animate-fade-in">
+            <div class="flex items-start justify-between gap-4 pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                        <i data-lucide="sliders" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 id="custom-model-modal-title" class="text-base font-bold tracking-tight">Test Custom Quantitative Model</h3>
+                        <p class="text-xs text-apple-gray mt-0.5">Configure hyperparameters and benchmark against Empirical Drift with zero leakage</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeCustomModelModal()" class="p-1.5 rounded-xl text-apple-gray hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition" aria-label="Close modal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <div>
+                    <div class="flex justify-between font-semibold mb-1">
+                        <span>Momentum Return Weight:</span>
+                        <span id="custom-momentum-val" class="text-indigo-600 dark:text-indigo-400 font-mono">0.5</span>
+                    </div>
+                    <input type="range" id="custom-momentum-slider" min="0.0" max="2.0" step="0.1" value="0.5" oninput="document.getElementById('custom-momentum-val').textContent = this.value" class="w-full accent-indigo-600">
+                </div>
+
+                <div>
+                    <div class="flex justify-between font-semibold mb-1">
+                        <span>Mean-Reversion Weight (Dist to SMA):</span>
+                        <span id="custom-reversion-val" class="text-indigo-600 dark:text-indigo-400 font-mono">0.2</span>
+                    </div>
+                    <input type="range" id="custom-reversion-slider" min="0.0" max="2.0" step="0.1" value="0.2" oninput="document.getElementById('custom-reversion-val').textContent = this.value" class="w-full accent-indigo-600">
+                </div>
+
+                <div>
+                    <div class="flex justify-between font-semibold mb-1">
+                        <span>L2 Shrinkage Penalty Alpha:</span>
+                        <span id="custom-alpha-val" class="text-indigo-600 dark:text-indigo-400 font-mono">8.0</span>
+                    </div>
+                    <input type="range" id="custom-alpha-slider" min="0.5" max="50.0" step="0.5" value="8.0" oninput="document.getElementById('custom-alpha-val').textContent = this.value" class="w-full accent-indigo-600">
+                </div>
+
+                <div class="pt-2">
+                    <button type="button" onclick="executeCustomModelTest()" id="custom-test-btn" class="w-full py-2.5 rounded-xl text-xs font-semibold bg-apple-blue text-white hover:bg-apple-blue/90 active:scale-95 transition shadow-sm flex items-center justify-center gap-2">
+                        <i data-lucide="play" class="w-3.5 h-3.5"></i> Run Walk-Forward Validation Benchmark
+                    </button>
+                </div>
+
+                <div id="custom-model-results" class="hidden p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.06] space-y-2">
+                    <h5 class="font-bold text-gray-900 dark:text-gray-100 flex items-center justify-between">
+                        <span>Validation Benchmark Results</span>
+                        <span id="custom-edge-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">+0.0% vs Baseline</span>
+                    </h5>
+                    <div class="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                        <div class="p-2 rounded-lg bg-black/5 dark:bg-white/5">
+                            <span class="text-apple-gray block text-[10px]">Custom Model MAE</span>
+                            <span id="custom-mae-val" class="font-bold">--%</span>
+                        </div>
+                        <div class="p-2 rounded-lg bg-black/5 dark:bg-white/5">
+                            <span class="text-apple-gray block text-[10px]">Drift Baseline MAE</span>
+                            <span id="custom-baseline-mae-val" class="font-bold">--%</span>
+                        </div>
+                    </div>
+                    <p id="custom-verdict-text" class="text-[11px] text-apple-gray pt-1"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
-    <script defer src="/static/app.js?v=20261010-10"></script>
+    <script defer src="/static/app.js?v=20261011-4"></script>
 </body>
 </html>

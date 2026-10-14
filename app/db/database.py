@@ -21,9 +21,16 @@ engine = create_engine(DB_PATH, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+def init_db():
+    import app.db.models  # noqa: F401
+    Base.metadata.create_all(bind=engine)
+
+init_db()
+
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+

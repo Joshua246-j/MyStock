@@ -2,7 +2,7 @@ import asyncio
 import logging
 from fastapi import APIRouter
 from app.db.models import UserSettings
-from app.db.database import SessionLocal
+from app.db.database import SessionLocal, engine
 from app.ollama_client import OllamaClient
 from app.rag.vector_store import get_vector_store
 from app.rag.lexical_store import lexical_index_available
@@ -48,16 +48,39 @@ async def health_check():
     faiss_call = asyncio.wait_for(asyncio.to_thread(_check_faiss), timeout=min(timeout, 3))
     lexical_call = asyncio.wait_for(asyncio.to_thread(lexical_index_available), timeout=min(timeout, 3))
     market_call = asyncio.wait_for(asyncio.to_thread(market_service.check_provider, "AAPL"), timeout=min(timeout, 3))
-    checks = await asyncio.gather(faiss_call, lexical_call, market_call, return_exceptions=True)
+    def _check_web():
+        import socket
+        try:
+            socket.gethostbyname("news.google.com")
+            return True
+        except Exception:
+            return False
+
+    web_call = asyncio.wait_for(asyncio.to_thread(_check_web), timeout=min(timeout, 2))
+    checks = await asyncio.gather(faiss_call, lexical_call, market_call, web_call, return_exceptions=True)
     faiss_ok = checks[0] is True
     lexical_ok = checks[1] is True
     market_result = checks[2] if isinstance(checks[2], dict) else {}
     market_ok = bool(isinstance(market_result, dict) and market_result.get("success"))
     provider = market_result.get("source") if market_ok else None
+    web_ok = checks[3] is True
+    
+    docs_count, chunks_count = 0, 0
+    try:
+        from app.db.models import DocumentMetadata
+        with SessionLocal() as db:
+            docs_count = db.query(DocumentMetadata).filter(DocumentMetadata.status == "completed").count()
+        from sqlalchemy import text as _text
+        with engine.connect() as conn:
+            chunks_count = conn.execute(_text("SELECT count(*) FROM rag_chunks")).scalar() or 0
+    except Exception:
+        pass
+
     return {
         "application": "running",
         "ollama": "connected" if ollama_ok else "disconnected",
         "model": model,
+        "database_stats": {"documents": docs_count, "chunks": chunks_count},
         "model_available": model_ok,
         "embedding_model": EMBEDDING_MODEL,
         "embedding_model_available": embedding_ok,
@@ -66,6 +89,10 @@ async def health_check():
         "keyword_document_retrieval": "available" if lexical_ok else "unavailable",
         "vector_database": "available" if faiss_ok else "unavailable",
         "vector_backend": "faiss-cpu",
+        "web_search": {
+            "status": "available" if web_ok else "unavailable",
+            "service": "Google News RSS & Allowed Publishers",
+        },
         "market_data": {
             "status": "available" if market_ok else "unavailable",
             "provider": provider,

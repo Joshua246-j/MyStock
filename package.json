@@ -8,13 +8,15 @@
     "test": "tests"
   },
   "scripts": {
-    "build:css": "tailwindcss -i ./static/input.css -o ./static/tailwind.css --minify"
+    "build:css": "tailwindcss -i ./static/input.css -o ./static/tailwind.css --minify",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",
+    "husky": "^9.1.7",
     "tailwindcss": "^4.3.3"
   },
   "dependencies": {

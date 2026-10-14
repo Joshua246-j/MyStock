@@ -4,7 +4,6 @@ import logging
 import re
 import unicodedata
 from pathlib import Path
-from functools import partial
 from datetime import datetime, timezone
 from typing import Any
 
@@ -38,12 +37,20 @@ _NUMERIC_METRIC_GROUPS = (
 
 
 def _missing_research_sections(response: str, *, require_sources: bool, detail: str = "balanced") -> list[str]:
-    required = [] if detail == "concise" else ["Answer", "Key Facts", "Analysis", "Limitations"]
-    if require_sources:
+    required = []
+    if detail == "concise":
+        if require_sources and not re.search(r"(?im)^##\s*Sources", response):
+            required.append("Sources")
+        return required
+    if not re.search(r"(?im)^##\s*Key Facts", response):
+        required.append("Key Facts")
+    if not re.search(r"(?im)^##\s*Analysis", response):
+        required.append("Analysis")
+    if not re.search(r"(?im)^##\s*Limitations", response):
+        required.append("Limitations")
+    if require_sources and not re.search(r"(?im)^##\s*Sources", response):
         required.append("Sources")
-    # Small local models sometimes put the first sentence on the heading line
-    # ("## Answer ..."). That is still a present section, not a format failure.
-    return [section for section in required if not re.search(rf"(?im)^##\s+{re.escape(section)}(?:\s|$)", response)]
+    return required
 
 
 _GROUNDING_STOPWORDS = {
@@ -195,12 +202,26 @@ def _contains_any_phrase(text: str, terms: tuple[str, ...]) -> bool:
     return any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text) for term in terms)
 
 
+GREETING_PATTERN = re.compile(
+    r"^(?:hi|hello|hey|hiya|howdy|good\s+(?:morning|afternoon|evening|day)|greetings|what'?s\s+up|sup|hola|namaste)(?:\s+(?:there|all|everyone|bot|assistant|mystock|stockrag|ai))?[!?. ]*$",
+    re.IGNORECASE,
+)
+
+
+def _is_greeting(text: str) -> bool:
+    return bool(GREETING_PATTERN.match(text.strip()))
+
+
 def classify_intents(message: str, symbol: str | None, settings: dict[str, Any]) -> set[str]:
     """Small, explicit multi-label classifier; no model call needed to route tools."""
-    text = message.casefold()
+    text = message.casefold().strip()
+    if _is_greeting(text):
+        return {"general_chat"}
     intents: set[str] = set()
     if symbol and _contains_any_phrase(text, ("quote", "price", "stock", "share", "market", "how much", "trading", "chart", "return", "performance", "compare", "trend", "today", "latest", "current")):
         intents.add("market_quote")
+    if symbol and _contains_any_phrase(text, ("forecast", "predict", "prediction", "price target", "projection", "future price", "price outlook", "next week", "next month", "expected return", "will it rise", "will it drop", "will it go up", "will it go down")):
+        intents.add("forecast")
     if symbol and settings.get("automatic_technical_analysis", True) and _contains_any_phrase(text, ("technical", "rsi", "macd", "sma", "ema", "moving average", "bollinger", "atr", "indicator", "chart", "candlestick", "candle", "return", "performance", "compare", "trend", "volatility", "drawdown")):
         intents.add("technical")
     document_context = bool(re.search(r"\b(?:according to|in (?:the |this |my )?(?:uploaded )?(?:document|pdf|report|filing|10\s*[- ]?k|10\s*[- ]?q)|uploaded (?:document|pdf|report)|filings?|10\s*[- ]?k|10\s*[- ]?q|annual report|quarterly report|prospectus)\b", text))
@@ -319,6 +340,7 @@ async def orchestrate_chat(
     market_data: IMarketData | None = None,
     retriever: IRetriever | None = None,
     prompt_builder: PromptBuilder | None = None,
+    web_crawl: bool | None = None,
 ):
     from app.db.database import SessionLocal
     from app.db.models import UserSettings
@@ -345,7 +367,23 @@ async def orchestrate_chat(
     chart_interval = chart_interval if chart_interval in {"1d", "1wk", "1mo"} else "1d"
     chart_mode = chart_mode if chart_mode in {"line", "candlestick"} else "line"
     chart_view = chart_view if chart_view in {"price", "volume", "trend", "bollinger", "rsi", "macd", "atr", "performance"} else "price"
-    excluded = {"A", "I", "K", "Q", "AI", "PDF", "RAG", "RSI", "MACD", "SMA", "EMA", "PE", "EPS", "CEO", "CFO", "GDP", "CAGR", "ROI", "DCA", "ROE", "ROA", "EBIT", "ESG", "SEC", "GAAP", "ETF", "IPO", "NYSE", "NASDAQ", "USD", "EUR", "INR", "USA", "UK", "IN", "QWEN", "GEMMA", "LLAMA", "NOMIC", "MISTRAL", "DEEPSEEK"}
+    excluded = {
+        "A", "I", "K", "Q", "AI", "PDF", "RAG", "RSI", "MACD", "SMA", "EMA", "PE", "EPS",
+        "CEO", "CFO", "CTO", "COO", "CIO", "GDP", "CAGR", "ROI", "DCA", "ROE", "ROA", "EBIT",
+        "EBITDA", "ESG", "SEC", "GAAP", "ETF", "IPO", "NYSE", "NASDAQ", "USD", "EUR", "INR",
+        "USA", "UK", "IN", "QWEN", "GEMMA", "LLAMA", "NOMIC", "MISTRAL", "DEEPSEEK",
+        "NAV", "WACC", "DCF", "LBO", "YTD", "QOQ", "YOY", "IRR", "NPV", "APR", "APY",
+        "ATH", "ATL", "VWAP", "OBV", "ADX", "CCI", "MFI", "BETA", "ALPHA", "SHARPE",
+        "CALL", "PUT", "FED", "FOMC", "CPI", "PPI", "PCE", "DJIA", "SPX", "NDX", "RUT",
+        "VIX", "CBOE", "CME", "OTC", "FINRA", "SIP", "FPO", "OFS", "NFO", "SENSEX",
+        "NIFTY", "BANKNIFTY", "MIDCAP", "WHAT", "HOW", "WHY", "WHEN", "WHERE", "WHO",
+        "WHICH", "CAN", "COULD", "WOULD", "SHOULD", "WILL", "DO", "DOES", "DID", "DONE",
+        "IS", "ARE", "WAS", "WERE", "BE", "BEEN", "HAVE", "HAS", "HAD", "THE", "THIS",
+        "THAT", "THESE", "THOSE", "FOR", "FROM", "WITH", "ABOUT", "AND", "BUT", "NOT",
+        "ALL", "ANY", "NEW", "TOP", "RUN", "GET", "SET", "USE", "TELL", "GIVE", "SHOW",
+        "WRITE", "EXPLAIN", "LIST", "HELP", "CODE", "CHAT", "BOT", "MODEL", "USER",
+        "STOCK", "SHARE", "PRICE", "MARKET", "TRADE", "BUY", "SELL", "HOLD"
+    }
     candidates = re.findall(r"(?<![A-Za-z0-9])[A-Z][A-Z0-9.-]{0,9}(?![A-Za-z0-9])", message)
     explicit_symbols = []
     for candidate in candidates:
@@ -371,23 +409,35 @@ async def orchestrate_chat(
     previous_user_message = _followup_context(message, history)
     retrieval_query = f"{previous_user_message}\nFollow-up: {message}" if previous_user_message else message
     selected_model = model or settings.get("ai_model") or ollama_client.model
-    intents = classify_intents(retrieval_query, symbol, settings)
-    if (symbol and settings.get("automatic_technical_analysis", True)
+    is_greeting = _is_greeting(message)
+    intents = {"general_chat"} if is_greeting else classify_intents(retrieval_query, symbol, settings)
+    if not is_greeting and (symbol and settings.get("automatic_technical_analysis", True)
             and chart_view in {"trend", "bollinger", "rsi", "macd", "atr", "performance"}
             and re.search(r"\b(?:this|that|these|it|explain|analy[sz]e|show|mean)\b", message.casefold())):
         intents.add("technical")
-    if document_ids:
+    if document_ids and not is_greeting:
         # An explicit document selection is a retrieval instruction even when
         # the prompt does not repeat words such as “PDF” or “report”.
         intents.add("document_qa")
-    metadata_filter = build_metadata_filter(retrieval_query, symbol)
+    metadata_filter = build_metadata_filter(retrieval_query, symbol) if not is_greeting else {}
     mode = mode or settings.get("default_chat_mode", "auto")
-    if mode == "market" and symbol and not (intents & {"market_quote", "technical", "fundamental", "news"}):
-        intents.add("market_quote")
-    elif mode == "documents":
-        intents.difference_update({"market_quote", "technical", "fundamental", "news"})
-    elif mode == "general":
-        intents.difference_update({"market_quote", "technical", "fundamental", "news", "web_research"})
+    if not is_greeting:
+        if mode == "market" and symbol and not (intents & {"market_quote", "technical", "fundamental", "news"}):
+            intents.add("market_quote")
+        elif mode == "documents":
+            intents.difference_update({"market_quote", "technical", "fundamental", "news"})
+        elif mode == "general":
+            has_url = bool(URL_RE.findall(message))
+            if has_url or web_crawl:
+                intents.add("web_research")
+            if document_ids:
+                intents.add("document_qa")
+            intents.difference_update({"market_quote", "technical", "fundamental", "news"})
+            if not document_ids and not has_url and not web_crawl and "web_research" not in intents and "document_qa" not in intents:
+                intents.clear()
+        else:
+            if web_crawl:
+                intents.add("web_research")
     started = datetime.now(timezone.utc)
     evidence: list[tuple[str, Any]] = []
     failures: list[str] = []
@@ -410,6 +460,19 @@ async def orchestrate_chat(
         if data.get("success"):
             return "fundamental", data
         raise RuntimeError(data.get("error", "Fundamentals unavailable"))
+
+    async def forecast_task():
+        from app.forecasting.service import ForecastingService
+        h = 5
+        if re.search(r"\b(?:tomorrow|1\s*[- ]?day|next\s+session|next\s+day)\b", message, re.IGNORECASE):
+            h = 1
+        elif re.search(r"\b(?:month|20\s*[- ]?days?|4\s*weeks?)\b", message, re.IGNORECASE):
+            h = 20
+        svc = ForecastingService()
+        data = await _thread_call(svc.forecast, symbol, horizon=h, model_name="auto", confidence=0.80)
+        if data.get("success"):
+            return "forecast", data
+        raise RuntimeError(data.get("error", "Forecast unavailable"))
 
     async def news_task():
         news = await _thread_call(market_data.get_news, symbol, timeout=timeout)
@@ -514,13 +577,33 @@ async def orchestrate_chat(
 
         if search_results:
             results = await asyncio.gather(*(_thread_call(index_search_result, result, timeout=timeout) for result in search_results), return_exceptions=True)
+            direct_lines = []
+            direct_sources = []
+            for item in search_results:
+                t = item.get("title", "")
+                pub = item.get("publisher", "")
+                dt = item.get("published_at", "")
+                snip = item.get("snippet", "")
+                direct_sources.append(f"{pub}: {t}" if pub else t)
+                desc = f"• **{t}** — {pub}" + (f" ({dt})" if dt else "")
+                if snip and snip != t:
+                    desc += f"\n  Excerpt: {snip}"
+                direct_lines.append(desc)
+            direct_context = "\n".join(direct_lines)
         else:
             results = await asyncio.gather(*(_thread_call(crawl_and_register, url, timeout=timeout) for url in urls[:3]), return_exceptions=True)
+            direct_context = ""
+            direct_sources = []
+
         successful = [item for item in results if isinstance(item, dict) and item.get("success")]
         errors = search_errors + [str(item) if isinstance(item, Exception) else item.get("error") for item in results if isinstance(item, Exception) or not item.get("success")]
         crawled_ids = [item["document_id"] for item in successful]
         retrieved = await _thread_call(retriever.retrieve_context, retrieval_query, k=int(settings.get("max_retrieved_documents", 5)), document_ids=crawled_ids, timeout=timeout) if crawled_ids else {"context": "", "sources": []}
-        return "web", {"crawled": len(successful), "errors": errors, "context": retrieved.get("context", ""), "sources": retrieved.get("sources", []), "retrieval_mode": retrieved.get("retrieval_mode")}
+        final_context = retrieved.get("context", "")
+        if direct_context:
+            final_context = direct_context if not final_context else f"{direct_context}\n\n{final_context}"
+        final_sources = list(dict.fromkeys(retrieved.get("sources", []) + direct_sources))
+        return "web", {"crawled": len(successful) or len(search_results), "errors": errors, "context": final_context, "sources": final_sources, "retrieval_mode": retrieved.get("retrieval_mode") or "web_feed"}
 
     tasks = []
     if "market_quote" in intents:
@@ -531,6 +614,8 @@ async def orchestrate_chat(
         tasks.append(fundamental_task())
     if "news" in intents:
         tasks.append(news_task())
+    if "forecast" in intents:
+        tasks.append(forecast_task())
     # Search documents only when asked, or when the user explicitly scoped the
     # conversation to selected documents. Prevent unrelated uploaded files from
     # leaking facts/citations into product help and general questions.
@@ -574,6 +659,31 @@ async def orchestrate_chat(
             context_sections.append(f"TECHNICAL INDICATORS AND PRICE-ONLY MODEL ANALYSIS ({symbol}; visible chart window={chart_period}; bar interval={chart_interval}; displayed chart type={chart_mode}; selected chart view={chart_view}; source={data.get('source')}; data status={data.get('data_status')}; last bar={data.get('last_bar_at')}): metrics={data.get('metrics')}; walk-forward model evaluation={data.get('ml_analysis')}; statistical scenario={data.get('scenario_estimate')}")
             citations.append(f"Technical analysis — {symbol} ({chart_period}, {chart_interval}; last bar {data.get('last_bar_at') or 'date unavailable'}; {data.get('source') or 'provider unavailable'})")
             market_sources += 1
+        elif kind == "forecast":
+            data_status = data.get("data_status") or data.get("freshness") or data_status
+            quote_timestamp = quote_timestamp or data.get("last_bar_at")
+            llm_p = data.get("llm_payload", {})
+            int_data = data.get("interval", {})
+            sig_list = [f"{s.get('feature')} ({s.get('direction', '')})" for s in data.get("signals", [])[:4]]
+            sig_str = ", ".join(sig_list) if sig_list else "Momentum, Volatility"
+            context_sections.append(
+                f"VALIDATED PROBABILISTIC FORECAST ({symbol}; horizon={data.get('horizon')} sessions; "
+                f"current price={data.get('current_price')} {data.get('currency')}; as-of={data.get('last_bar_at')}; "
+                f"selected model={data.get('selected_model')}):\n"
+                f"- Expected return: {int_data.get('expected_return_percent')}%\n"
+                f"- Price estimate: {int_data.get('expected_price')} {data.get('currency')} "
+                f"(Calibrated {int_data.get('confidence_percent')}% interval: "
+                f"[{int_data.get('lower_bound_price')} – {int_data.get('upper_bound_price')}])\n"
+                f"- Directional probability: {llm_p.get('directional_probability_bullish_percent')}% Bullish\n"
+                f"- Walk-forward backtest metrics: OOS MAE = {llm_p.get('walk_forward_metrics', {}).get('mae_percent')}%, "
+                f"Directional accuracy = {llm_p.get('walk_forward_metrics', {}).get('directional_accuracy_percent')}%, "
+                f"Beats naive baseline = {llm_p.get('walk_forward_metrics', {}).get('beats_naive_baseline')}\n"
+                f"- Top driving signals: {sig_str}\n"
+                f"- Limitations: {data.get('disclaimer')}\n"
+                "INSTRUCTION: Preserve numerical values exactly. Explicitly acknowledge uncertainty and state that this is a probabilistic estimate."
+            )
+            citations.append(f"Probabilistic Forecast — {symbol} ({data.get('selected_model')}, {data.get('horizon')}-session horizon; as of {data.get('last_bar_at')})")
+            market_sources += 1
         elif kind == "fundamental":
             context_sections.append(f"FUNDAMENTALS ({symbol}; provider={data.get('source')}): {data.get('metrics')}")
             citations.append(f"Fundamentals — {data.get('source')}")
@@ -615,13 +725,27 @@ async def orchestrate_chat(
     evidence_retrieved = bool(context_sections)
 
     response_detail = settings.get("response_detail", "balanced")
-    detail_instruction = {
-        "concise": "Keep the answer under 100 words. Use only directly supported facts and a compact Sources section. Avoid repeating the question or adding generic filler.",
-        "balanced": "Use a balanced level of detail. Keep every claim tied to supplied evidence.",
-        "detailed": "Explain reasoning and evidence in detail. Keep every claim tied to supplied evidence.",
-    }.get(response_detail, "Use a balanced level of detail. Keep every claim tied to supplied evidence.")
+    if is_greeting:
+        detail_instruction = "Reply warmly, helpfully, and briefly in 1-2 short sentences. Do not include markdown headers, bullet lists, or unsolicited disclaimers."
+    elif mode == "general" or not context_sections or intents == {"general_chat"}:
+        detail_instruction = "Give a valid, direct, short, proper answer in clean Markdown. Answer directly and concisely without unnecessary filler, disclaimers, or echoing raw URLs."
+    else:
+        detail_instruction = {
+            "concise": "Give a valid, direct, short, proper answer containing only the necessary facts. Keep it concise. Cite sources simply by name without raw URLs.",
+            "balanced": "Give a valid, direct, short, proper answer in clean Markdown containing only the proper, needed facts and analysis. Avoid filler, conversational padding, or raw URLs. Cite supplied sources cleanly.",
+            "detailed": "Provide a thorough, accurate, evidence-based answer explaining reasoning clearly. Keep claims tied to evidence without boilerplate disclaimers or raw URLs.",
+        }.get(response_detail, "Give a valid, direct, short, proper answer containing only the proper, needed facts and analysis. Avoid filler.")
+    custom_persona = (settings.get("custom_persona") or "").strip()
+    if custom_persona:
+        detail_instruction = f"{detail_instruction}\n\nCustom Persona & Instructions:\n{custom_persona}"
     prompt_history = _trim_prompt_history(history, int(settings.get("context_size", 4096)))
-    messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction, local_model=selected_model)
+    try:
+        messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction, local_model=selected_model, mode=mode)
+    except TypeError:
+        try:
+            messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction, local_model=selected_model)
+        except TypeError:
+            messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction)
 
     numeric_validation = "not_applicable"
     numeric_fallback = False
@@ -641,7 +765,7 @@ async def orchestrate_chat(
         )
         model_identity_answer = True
         model_identity_unavailable = not model_is_installed
-    if "document_qa" in intents and _is_numeric_document_question(message):
+    if "document_qa" in intents and _is_numeric_document_question(message) and (document_passages or document_ids):
         fact = _document_numeric_fact(message, document_passages)
         if fact:
             response = _direct_source_answer(fact)
@@ -670,7 +794,11 @@ async def orchestrate_chat(
                 "timeout": timeout,
                 "temperature": float(settings.get("temperature", 0.2)),
                 "context_size": int(settings.get("context_size", 4096)),
-                "max_output_tokens": int(settings.get("max_output_tokens", 256)),
+                "max_output_tokens": int(settings.get("max_output_tokens", 2048)),
+                "top_p": float(settings.get("top_p", 0.9)),
+                "top_k": int(settings.get("top_k", 40)),
+                "repeat_penalty": float(settings.get("repeat_penalty", 1.1)),
+                "seed": int(settings.get("seed", 0)),
             }
             if on_token is None:
                 response = await asyncio.wait_for(ollama_client.chat(messages, selected_model, **generation_options), timeout=timeout)
@@ -687,7 +815,8 @@ async def orchestrate_chat(
                             chunks.append(token)
                             on_token(token)
                         if item.get("done") and item.get("done_reason") == "length":
-                            raise OllamaError("The selected model reached its answer-token limit before finishing. Increase Maximum answer tokens in Settings and retry.", code="ollama_output_limit", status_code=422)
+                            logger.info("model_stream_hit_length_limit", extra={"model": selected_model, "tokens_accumulated": len(chunks)})
+                            break
                     text = "".join(chunks).strip()
                     if not text:
                         raise OllamaError("Ollama returned an empty response. Retry your request.", code="ollama_empty_response")
@@ -715,7 +844,7 @@ async def orchestrate_chat(
         )
         rag_grounding_fallback = True
 
-    format_required = bool(evidence_retrieved or intents & {"market_quote", "technical", "fundamental", "news", "document_qa", "web_research"} or dataset_path)
+    format_required = bool((evidence_retrieved or dataset_path) and mode not in {"general"} and intents != {"general_chat"})
     missing_sections = _missing_research_sections(response, require_sources=bool(unique_citations), detail=response_detail) if format_required else []
 
     if response.startswith("Error:"):
@@ -723,19 +852,13 @@ async def orchestrate_chat(
     response_sources = response.split("## Sources", 1)[1] if "## Sources" in response else ""
     model_cited_retrieved_source = any(_citation_matches(source, response_sources) for source in unique_citations)
     citation_unverified = evidence_retrieved and (not response_sources or bool(unique_citations) and not model_cited_retrieved_source)
-    if citation_unverified:
+    if citation_unverified and unique_citations:
         if "## Sources" in response:
             response = response.split("## Sources", 1)[0].rstrip()
-        if unique_citations:
-            response += "\n\n## Sources\n" + "\n".join(f"- {source}" for source in unique_citations)
-        response += "\n\n*Source verification: the model did not provide a verifiable Sources section; citations above list retrieved evidence, not verified claim-to-source links.*"
-    if not unique_citations and "## Sources" in response:
-        response += "\n\n*Source verification: no external source was retrieved for this response; verify claims independently.*"
+        response += "\n\n## Sources\n" + "\n".join(f"- {source}" for source in unique_citations)
 
     missing_sections = _missing_research_sections(response, require_sources=bool(unique_citations), detail=response_detail) if format_required else []
     format_unverified = bool(missing_sections)
-    if format_unverified:
-        response += "\n\n*Format check: this answer is missing one or more expected sections. Review it as an unstructured response.*"
 
     finished = datetime.now(timezone.utc)
     return {

@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Any
-import json
 import datetime
 import logging
 import math
-from sqlalchemy.orm import Session
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from app.db.database import SessionLocal
 from app.db.models import CacheEntry

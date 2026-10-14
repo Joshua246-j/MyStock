@@ -49,6 +49,48 @@ class YFinanceProvider(MarketDataProvider):
             change = price - prev_close if prev_close else 0
             change_percent = (change / prev_close * 100) if prev_close else 0
 
+            # Extract exact exchange metadata and release timestamp
+            metadata = {}
+            try:
+                metadata = info._get_exchange_metadata() or {}
+            except Exception:
+                pass
+
+            regular_market_time = metadata.get("regularMarketTime")
+            market_time_iso = None
+            if regular_market_time is not None:
+                if hasattr(regular_market_time, "isoformat"):
+                    market_time_iso = regular_market_time.isoformat()
+                else:
+                    try:
+                        market_time_iso = pd.to_datetime(regular_market_time, unit="s", utc=True).isoformat()
+                    except Exception:
+                        market_time_iso = str(regular_market_time)
+
+            exchange_name = metadata.get("fullExchangeName") or metadata.get("exchangeName") or getattr(info, "exchange", "US Exchange")
+            exchange_tz = metadata.get("exchangeTimezoneName") or metadata.get("timezone") or getattr(info, "timezone", "UTC")
+
+            # Determine genuine session state
+            now_utc = datetime.now(timezone.utc)
+            is_market_open = False
+            trading_period = metadata.get("currentTradingPeriod", {})
+            if isinstance(trading_period, dict):
+                reg_period = trading_period.get("regular", {})
+                if isinstance(reg_period, dict) and reg_period.get("start") and reg_period.get("end"):
+                    try:
+                        p_start = reg_period["start"].to_pydatetime() if hasattr(reg_period["start"], "to_pydatetime") else reg_period["start"]
+                        p_end = reg_period["end"].to_pydatetime() if hasattr(reg_period["end"], "to_pydatetime") else reg_period["end"]
+                        if p_start.tzinfo is None:
+                            p_start = p_start.replace(tzinfo=timezone.utc)
+                        if p_end.tzinfo is None:
+                            p_end = p_end.replace(tzinfo=timezone.utc)
+                        is_market_open = p_start <= now_utc <= p_end
+                    except Exception:
+                        pass
+
+            market_session = "REGULAR_MARKET_OPEN" if is_market_open else "MARKET_CLOSED"
+            data_status = "REALTIME_QUOTE" if is_market_open else "OFFICIAL_CLOSE"
+
             return {
                 "success": True,
                 "symbol": symbol,
@@ -57,22 +99,30 @@ class YFinanceProvider(MarketDataProvider):
                 "change_percent": change_percent,
                 "previous_close": prev_close,
                 "open": getattr(info, "open", None),
+                "day_high": getattr(info, "day_high", None) or metadata.get("regularMarketDayHigh"),
+                "day_low": getattr(info, "day_low", None) or metadata.get("regularMarketDayLow"),
+                "year_high": getattr(info, "year_high", None) or metadata.get("fiftyTwoWeekHigh"),
+                "year_low": getattr(info, "year_low", None) or metadata.get("fiftyTwoWeekLow"),
+                "fifty_day_average": getattr(info, "fifty_day_average", None),
+                "two_hundred_day_average": getattr(info, "two_hundred_day_average", None),
                 "volume": getattr(info, "last_volume", 0),
                 "market_cap": getattr(info, "market_cap", 0),
                 "currency": getattr(info, "currency", "USD"),
-                # yfinance is an unofficial interface and does not provide a
-                # dependable entitlement/freshness guarantee. Never label it live.
+                "exchange": exchange_name,
+                "exchange_timezone": exchange_tz,
+                "market_time": market_time_iso,
+                "market_session": market_session,
                 "retrieved_at": datetime.now().astimezone().isoformat(),
-                "data_status": "UNVERIFIED_FRESHNESS",
-                "status": "DELAYED_OR_UNVERIFIED",
-                "source": "yfinance (unofficial; freshness not guaranteed)"
+                "data_status": data_status,
+                "status": data_status,
+                "source": f"Yahoo Finance ({exchange_name})"
             }
         return self._safe_execute(symbol, _fetch)
 
-    def get_history(self, symbol: str, period: str = "1mo", interval: str = "1d") -> Dict[str, Any]:
+    def get_history(self, symbol: str, period: str = "1mo", interval: str = "1d", auto_adjust: bool = True) -> Dict[str, Any]:
         def _fetch():
             ticker = yf.Ticker(symbol)
-            hist = ticker.history(period=period, interval=interval)
+            hist = ticker.history(period=period, interval=interval, auto_adjust=auto_adjust)
             if hist.empty:
                 raise ValueError("No historical data found")
             
