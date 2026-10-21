@@ -28,7 +28,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 html[data-theme="light"] input:not([type="checkbox"]), html[data-theme="light"] textarea, html[data-theme="light"] select { background-color:rgba(255,255,255,.82); color:var(--text-main); }
 html[data-theme="dark"] input:not([type="checkbox"]), html[data-theme="dark"] textarea, html[data-theme="dark"] select { background-color:rgba(44,44,46,.9); color:var(--text-main); }
 button, input, textarea, select { font: inherit; }
-button { min-height: 44px; }
+button:not([class*="h-"]):not([class*="w-"]):not(.dock-btn):not(.series-toggle-pill):not(.forecast-horizon-btn):not(.forecast-view-pill):not(.chat-mode-btn):not(.code-copy-btn):not(.insta-action-btn) { min-height: 36px; }
 .glass-panel, .chat-bubble-ai, .metric-card { background: var(--glass-bg); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); }
 .glass-sidebar { background: var(--sidebar-bg); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); border-color: var(--glass-border); }
 .nav-item { transition: background .22s cubic-bezier(.32,.72,0,1), color .22s; min-height: 46px; }
@@ -1732,7 +1732,8 @@ html.dark .insta-news-card:hover {
   border: 1px solid rgba(120, 120, 128, 0.18);
   background: #18181b;
 }
-html.light .chat-code-block {
+html.light .chat-code-block,
+html[data-theme="light"] .chat-code-block {
   background: #f4f4f5;
   border-color: rgba(0, 0, 0, 0.1);
 }
@@ -1746,7 +1747,8 @@ html.light .chat-code-block {
   font-size: 11px;
   color: #a1a1aa;
 }
-html.light .chat-code-header {
+html.light .chat-code-header,
+html[data-theme="light"] .chat-code-header {
   background: rgba(0, 0, 0, 0.05);
   color: #52525b;
 }
@@ -1759,7 +1761,8 @@ html.light .chat-code-header {
   line-height: 1.5;
   box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
 }
-html.dark .chat-user-bubble-chatgpt {
+html.dark .chat-user-bubble-chatgpt,
+html[data-theme="dark"] .chat-user-bubble-chatgpt {
   background: #4338ca;
 }
 .prompt-chip {
@@ -1778,7 +1781,8 @@ html.dark .chat-user-bubble-chatgpt {
   color: #4f46e5;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
-html.dark .forecast-view-pill.active {
+html.dark .forecast-view-pill.active,
+html[data-theme="dark"] .forecast-view-pill.active {
   background: rgba(255, 255, 255, 0.12);
   color: #a5b4fc;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);

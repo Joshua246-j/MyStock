@@ -87,7 +87,10 @@
         ];
 
         function applyTheme(theme, density = currentSettings.ui_density) {
-            document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+            const isDark = theme === 'dark';
+            document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+            document.documentElement.classList.toggle('dark', isDark);
+            document.documentElement.classList.toggle('light', !isDark);
             document.documentElement.dataset.density = density === 'compact' ? 'compact' : 'comfortable';
             document.documentElement.dataset.advanced = currentSettings.show_advanced_metrics === false ? 'false' : 'true';
         }
@@ -3867,7 +3870,7 @@
                         <div>
                             <div class="flex items-center justify-between mb-1">
                                 <span class="font-bold text-xs text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">${escapeHtml(item.symbol)}</span>
-                                <span class="px-1.5 py-0.2 rounded-full text-[9px] font-bold ${isPos ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'}">
+                                <span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold ${isPos ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'}">
                                     ${isPos ? '▲ +' : '▼ '}${ret.toFixed(1)}%
                                 </span>
                             </div>
@@ -5665,7 +5668,7 @@
                         <div>
                             <span class="text-xs font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
                                 ${escapeHtml(item.symbol)}
-                                <span class="text-[9px] font-semibold px-1.5 py-0.2 rounded ${item.exchange === 'NSE' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'}">${escapeHtml(item.exchange)}</span>
+                                <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded ${item.exchange === 'NSE' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'}">${escapeHtml(item.exchange)}</span>
                             </span>
                             <span class="text-[11px] text-apple-gray block truncate max-w-[200px] sm:max-w-xs">${escapeHtml(item.name)}</span>
                         </div>
@@ -5741,9 +5744,45 @@
             }
 
             if (e.key === 'Escape') {
-                const modal = document.getElementById('spotlight-search-modal');
-                if (modal && !modal.classList.contains('hidden')) {
+                const spotlightModal = document.getElementById('spotlight-search-modal');
+                if (spotlightModal && !spotlightModal.classList.contains('hidden')) {
                     closeSpotlightSearch();
+                    return;
+                }
+                const settingsModal = document.getElementById('settings-modal');
+                if (settingsModal && !settingsModal.classList.contains('pointer-events-none') && !settingsModal.classList.contains('opacity-0')) {
+                    toggleModal('settings-modal');
+                    return;
+                }
+                const docsModal = document.getElementById('docs-modal');
+                if (docsModal && !docsModal.classList.contains('pointer-events-none') && !docsModal.classList.contains('opacity-0')) {
+                    toggleModal('docs-modal');
+                    return;
+                }
+                const modelInfoModal = document.getElementById('model-info-modal');
+                if (modelInfoModal && !modelInfoModal.classList.contains('hidden')) {
+                    closeModelInfoModal();
+                    return;
+                }
+                const systemHealthModal = document.getElementById('system-health-modal');
+                if (systemHealthModal && !systemHealthModal.classList.contains('hidden')) {
+                    closeSystemHealthModal();
+                    return;
+                }
+                const customModelModal = document.getElementById('custom-model-modal');
+                if (customModelModal && !customModelModal.classList.contains('hidden')) {
+                    closeCustomModelModal();
+                    return;
+                }
+                const forecastUploadModal = document.getElementById('forecast-upload-modal');
+                if (forecastUploadModal && !forecastUploadModal.classList.contains('hidden')) {
+                    closeForecastUploadModal();
+                    return;
+                }
+                const popover = document.getElementById('system-status-popover');
+                if (popover && !popover.classList.contains('hidden')) {
+                    closeSystemStatus();
+                    return;
                 }
             }
         });
