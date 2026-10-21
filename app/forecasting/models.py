@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import abc
 import logging
+import math
 from typing import Any
 
 import numpy as np
@@ -237,8 +238,8 @@ class RandomForestReturnForecaster(BaseForecaster):
 
     def __init__(
         self,
-        n_estimators: int = 45,
-        max_depth: int = 5,
+        n_estimators: int = 15,
+        max_depth: int = 4,
         min_samples_leaf: int = 5,
         random_state: int = 42,
     ):
@@ -252,7 +253,7 @@ class RandomForestReturnForecaster(BaseForecaster):
             max_depth=self.max_depth,
             min_samples_leaf=self.min_samples_leaf,
             random_state=self.random_state,
-            n_jobs=-1,
+            n_jobs=1,
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "RandomForestReturnForecaster":
@@ -282,7 +283,7 @@ class MLPNeuralReturnForecaster(BaseForecaster):
         self,
         hidden_layer_sizes: tuple[int, ...] = (16, 8),
         alpha: float = 2.0,
-        max_iter: int = 150,
+        max_iter: int = 160,
         random_state: int = 42,
     ):
         super().__init__("mlp_neural_net")
@@ -296,14 +297,18 @@ class MLPNeuralReturnForecaster(BaseForecaster):
             activation="relu",
             solver="adam",
             alpha=self.alpha,
-            learning_rate_init=0.005,
+            learning_rate_init=0.015,
             max_iter=self.max_iter,
             early_stopping=True,
-            n_iter_no_change=8,
+            n_iter_no_change=5,
+            tol=1e-3,
             random_state=self.random_state,
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "MLPNeuralReturnForecaster":
+        import warnings
+        from sklearn.exceptions import ConvergenceWarning
+
         valid_mask = np.isfinite(X).all(axis=1) & np.isfinite(y)
         x_clean = X[valid_mask]
         y_clean = y[valid_mask]
@@ -314,7 +319,9 @@ class MLPNeuralReturnForecaster(BaseForecaster):
 
         x_scaled = self.scaler.fit_transform(x_clean)
         x_clipped = np.clip(x_scaled, -3.0, 3.0)
-        self.model.fit(x_clipped, y_clean)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=ConvergenceWarning)
+            self.model.fit(x_clipped, y_clean)
         self.is_fitted = True
         return self
 

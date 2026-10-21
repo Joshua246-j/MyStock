@@ -144,3 +144,16 @@ class ForecastRecord(Base):
     created_at = Column(DateTime, default=utcnow_naive)
     metadata_json = Column(JSON, nullable=False, default=dict)
 
+
+class UserMemory(Base):
+    __tablename__ = "user_memories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, default="default_user", index=True, nullable=False)
+    key = Column(String(100), nullable=False, index=True)
+    value = Column(Text, nullable=False)
+    category = Column(String(50), default="preference", nullable=False)  # "preference", "constraint", "watchlist", "context"
+    created_at = Column(DateTime, default=utcnow_naive)
+    updated_at = Column(DateTime, default=utcnow_naive, onupdate=utcnow_naive)
+    metadata_json = Column(JSON, nullable=False, default=dict)
+

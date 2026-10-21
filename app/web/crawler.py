@@ -11,6 +11,7 @@ from threading import Lock
 from time import monotonic, sleep
 from urllib.robotparser import RobotFileParser
 from hashlib import sha256
+from typing import Any
 from app.rag.ingest import chunk_and_store
 
 ALLOWED_DOMAINS = {
@@ -39,11 +40,19 @@ _CRAWLER_AGENT = "MyStockResearch/1.0 (https://mystock.ai; contact: research@mys
 _SEARCH_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 
+_NAT64_PREFIX = ipaddress.ip_network("64:ff9b::/96")
+
+
 def _is_safe_public_host(host: str, port: int) -> bool:
     try:
         resolved = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
         for item in resolved:
             ip = ipaddress.ip_address(item[4][0])
+            if ip in _NAT64_PREFIX:
+                v4 = ipaddress.ip_address(int(ip) & 0xFFFFFFFF)
+                if not v4.is_global or v4.is_loopback or v4.is_private or v4.is_reserved or v4.is_link_local:
+                    return False
+                continue
             if not ip.is_global or ip.is_loopback or ip.is_private or ip.is_reserved or ip.is_link_local:
                 return False
         return True
@@ -71,8 +80,124 @@ def _allowed_public_url(url: str, allow_all_public: bool = True) -> bool:
 
 
 
-def search_web(query: str, max_results: int = 5, timeout: float = 8.0, market: str = "us") -> list[dict[str, str]]:
-    """Retrieve news-search evidence from Google News RSS, limited to trusted publishers."""
+def search_duckduckgo(query: str, max_results: int = 6, timeout: float = 8.0) -> list[dict[str, Any]]:
+    """Search the public web using DuckDuckGo HTML endpoint, extracting real links, snippets, dates, and clean domains."""
+    from urllib.parse import parse_qs, unquote
+    safe_query = " ".join(str(query).split())[:500]
+    if not safe_query:
+        return []
+
+    headers = {
+        "User-Agent": _SEARCH_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    results: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    try:
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+            response = client.post(
+                "https://html.duckduckgo.com/html/",
+                data={"q": safe_query},
+                headers=headers,
+            )
+            if response.status_code != 200:
+                response = client.get(
+                    "https://html.duckduckgo.com/html/",
+                    params={"q": safe_query},
+                    headers=headers,
+                )
+            if response.status_code != 200:
+                return []
+            body = response.text
+
+        soup = BeautifulSoup(body, "html.parser")
+        items = soup.select(".result")
+        for item in items:
+            title_node = item.select_one(".result__title a") or item.select_one(".result__snippet")
+            snippet_node = item.select_one(".result__snippet")
+            if not title_node:
+                continue
+
+            raw_url = title_node.get("href", "")
+            if "uddg=" in raw_url:
+                parsed_q = parse_qs(urlparse(raw_url).query)
+                actual_url = parsed_q.get("uddg", [raw_url])[0]
+            else:
+                actual_url = raw_url
+            actual_url = unquote(actual_url)
+
+            if not actual_url.startswith(("http://", "https://")):
+                continue
+            if not _allowed_public_url(actual_url, allow_all_public=True):
+                continue
+
+            clean_key = actual_url.split("?", 1)[0].rstrip("/")
+            if clean_key in seen:
+                continue
+            seen.add(clean_key)
+
+            title = title_node.get_text(" ", strip=True)
+            snippet = snippet_node.get_text(" ", strip=True) if snippet_node else ""
+
+            # Extract date if snippet starts with date prefix
+            pub_date = None
+            date_match = re.match(
+                r"^([A-Z][a-z]{2,8}\s+\d{1,2},\s+\d{4}|\d{1,2}\s+[A-Z][a-z]{2,8}\s+\d{4}|\d+\s+(?:days?|hours?|months?|weeks?|years?)\s+ago)\s*[-–—:.…\s]*",
+                snippet,
+            )
+            if date_match:
+                pub_date = date_match.group(1).strip()
+                snippet = snippet[date_match.end():].strip()
+
+            parsed_host = (urlparse(actual_url).hostname or "").lower().removeprefix("www.")
+            # Identify clean publisher name and icon
+            if "reddit.com" in parsed_host:
+                publisher = "Reddit"
+                icon_type = "reddit"
+            elif "youtube.com" in parsed_host:
+                publisher = "YouTube"
+                icon_type = "youtube"
+            elif "github.com" in parsed_host:
+                publisher = "GitHub"
+                icon_type = "github"
+            elif "wikipedia.org" in parsed_host:
+                publisher = "Wikipedia"
+                icon_type = "wikipedia"
+            elif "musicradar.com" in parsed_host:
+                publisher = "MusicRadar"
+                icon_type = "music"
+            elif "ableton.com" in parsed_host:
+                publisher = "Ableton"
+                icon_type = "music"
+            else:
+                parts = parsed_host.split(".")
+                name = parts[0] if len(parts) <= 2 else parts[-2]
+                publisher = name.replace("-", " ").capitalize()
+                icon_type = "globe"
+
+            results.append({
+                "title": title[:300],
+                "url": actual_url,
+                "publisher": publisher[:120],
+                "publisher_url": f"https://{parsed_host}",
+                "domain": parsed_host,
+                "snippet": snippet[:1000],
+                "image": None,
+                "published_at": pub_date,
+                "icon": icon_type,
+            })
+            if len(results) >= max(1, min(int(max_results), 30)):
+                break
+    except Exception as exc:
+        logger.info("duckduckgo_search_failed", extra={"query": safe_query, "error": str(exc)})
+
+    return results
+
+
+def search_google_news(query: str, max_results: int = 5, timeout: float = 8.0, market: str = "us", allow_all_publishers: bool = False) -> list[dict[str, Any]]:
+    """Retrieve news-search evidence from Google News RSS."""
     safe_query = " ".join(str(query).split())[:500]
     if not safe_query:
         return []
@@ -90,7 +215,7 @@ def search_web(query: str, max_results: int = 5, timeout: float = 8.0, market: s
     if body is None:
         raise ValueError("The news-search response exceeded the size limit.")
     root = ET.fromstring(body)
-    results: list[dict[str, str]] = []
+    results: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in root.findall(".//item"):
         def text_for(name: str) -> str:
@@ -104,12 +229,12 @@ def search_web(query: str, max_results: int = 5, timeout: float = 8.0, market: s
         if description_node is not None:
             image_node = BeautifulSoup(ET.tostring(description_node, encoding="unicode"), "html.parser").find("img")
             candidate_image = image_node.get("src") if image_node else None
-            if candidate_image and _allowed_public_url(candidate_image):
+            if candidate_image and _allowed_public_url(candidate_image, allow_all_public=allow_all_publishers):
                 image_url = candidate_image
         publisher_node = item.find("source")
         publisher = " ".join((publisher_node.text or "").split()) if publisher_node is not None else ""
         publisher_url = (publisher_node.get("url") or "") if publisher_node is not None else ""
-        if not title or not _allowed_public_url(publisher_url, allow_all_public=False):
+        if not title or not _allowed_public_url(publisher_url, allow_all_public=allow_all_publishers):
             continue
         if not url.startswith("https://news.google.com/rss/articles/"):
             continue
@@ -123,18 +248,57 @@ def search_web(query: str, max_results: int = 5, timeout: float = 8.0, market: s
         normalized_title_source = normalize_result_text(f"{title} {publisher}")
         if normalized_snippet == normalized_title_source or normalized_snippet == normalize_result_text(title):
             snippet = ""
+        domain = (urlparse(publisher_url).hostname or "").lower().removeprefix("www.")
         results.append({
             "title": title[:300],
             "url": url,
             "publisher": publisher[:120],
             "publisher_url": publisher_url,
+            "domain": domain,
             "snippet": snippet,
             "image": image_url,
             "published_at": text_for("pubDate"),
+            "icon": "newspaper",
         })
         if len(results) >= max(1, min(int(max_results), 30)):
             break
     return results
+
+
+def search_web(query: str, max_results: int = 5, timeout: float = 8.0, market: str = "us", allow_all_domains: bool = True, provider: str = "auto") -> list[dict[str, Any]]:
+    """Unified multi-engine search: searches DuckDuckGo for general & multi-source web queries (Reddit, tutorials, etc.),
+
+    or Google News RSS for dedicated financial filing and breaking market news.
+    """
+    safe_query = " ".join(str(query).split())[:500]
+    if not safe_query:
+        return []
+
+    lowered = safe_query.lower()
+    is_filing_or_earnings = any(k in lowered for k in ("filing", "10-k", "10-q", "sec.gov", "annual report"))
+    wants_reddit = "reddit" in lowered
+    wants_general = any(k in lowered for k in ("genre", "music", "code", "reddit", "guide", "how to", "best", "tutorial", "production", "difference", "compare"))
+
+    # If filing-specific or explicitly requesting Google News
+    if (is_filing_or_earnings or provider == "google_news") and not wants_reddit and not wants_general:
+        try:
+            gn_results = search_google_news(safe_query, max_results=max_results, timeout=timeout, market=market, allow_all_publishers=False)
+            if gn_results:
+                return gn_results
+        except Exception as exc:
+            logger.info("google_news_search_fallback", extra={"reason": str(exc)})
+
+    # DuckDuckGo multi-source search (Reddit, articles, web)
+    ddg_results = search_duckduckgo(safe_query, max_results=max_results, timeout=timeout)
+    if ddg_results:
+        return ddg_results
+
+    # Fallback to Google News RSS
+    try:
+        return search_google_news(safe_query, max_results=max_results, timeout=timeout, market=market, allow_all_publishers=allow_all_domains)
+    except Exception as exc:
+        logger.info("fallback_google_news_failed", extra={"reason": str(exc)})
+        return []
 
 
 def fetch_topic_rss(market: str = "us", max_results: int = 40, timeout: float = 6.0) -> list[dict[str, str]]:
@@ -302,8 +466,7 @@ def crawl_url(url: str, timeout: float = 15.0, document_id: int | None = None, m
             if canonical:
                 from urllib.parse import urljoin
                 canonical = urljoin(url, canonical)
-                canonical_domain = (urlparse(canonical).hostname or "").lower().removeprefix("www.")
-                if urlparse(canonical).scheme not in {"http", "https"} or canonical_domain not in ALLOWED_DOMAINS:
+                if not _allowed_public_url(canonical, allow_all_public=True):
                     canonical = url
             author_tag = soup.find("meta", attrs={"name": "author"}) or soup.find("meta", attrs={"property": "article:author"})
             published_tag = soup.find("meta", attrs={"property": "article:published_time"}) or soup.find("meta", attrs={"name": "date"})

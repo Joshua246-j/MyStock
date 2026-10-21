@@ -7,6 +7,7 @@ from app.db.models import ChatSession, ChatMessage, UserSettings, DocumentMetada
 from app.config import UPLOAD_DIR, OLLAMA_MODEL
 from app.analysis.orchestrator import orchestrate_chat
 from app.ollama_client import OllamaError
+from app.services.memory import MemoryService, extract_memory_directive
 import logging
 from typing import Literal
 from sqlalchemy import func
@@ -211,7 +212,7 @@ class ChatService:
         self.db.commit()
         return True
 
-    def chat(self, message: str, dataset_id: int | None, dataset_path: str | None, symbol: str | None, session_id: str | None, mode: Literal["auto", "market", "documents", "general"] | None, document_ids: list[int] | None, chart_period: str | None = None, chart_interval: str | None = None, chart_mode: str | None = None, chart_view: str | None = None, token_callback=None, web_crawl: bool | None = None, model: str | None = None, temperature: float | None = None, max_output_tokens: int | None = None, top_p: float | None = None, top_k: int | None = None, repeat_penalty: float | None = None, seed: int | None = None, custom_persona: str | None = None):
+    def chat(self, message: str, dataset_id: int | None = None, dataset_path: str | None = None, symbol: str | None = None, session_id: str | None = None, mode: Literal["auto", "market", "documents", "general"] | None = None, document_ids: list[int] | None = None, chart_period: str | None = None, chart_interval: str | None = None, chart_mode: str | None = None, chart_view: str | None = None, token_callback=None, web_crawl: bool | None = None, model: str | None = None, temperature: float | None = None, max_output_tokens: int | None = None, top_p: float | None = None, top_k: int | None = None, repeat_penalty: float | None = None, seed: int | None = None, custom_persona: str | None = None):
         settings = dict(self._get_settings())
         ai_model = (model.strip() if model and model.strip() else None) or settings.get("ai_model", OLLAMA_MODEL)
         if temperature is not None:
@@ -280,6 +281,108 @@ class ChatService:
         self.db.commit()
         user_message_id = user_msg.id
 
+        mem_svc = MemoryService(self.db)
+        directive = extract_memory_directive(message)
+        if directive:
+            if directive["action"] in ("remember", "set"):
+                saved = mem_svc.set_memory(directive["key"], directive["value"], category=directive.get("category", "preference"))
+                answer_text = (
+                    f"### Memory Saved\n\n"
+                    f"I have saved this to your persistent profile memory:\n"
+                    f"- **{saved['key'].replace('_', ' ').title()}**: {saved['value']}\n\n"
+                    f"I'll remember this context for future market analysis and research queries."
+                )
+            elif directive["action"] in ("forget", "delete"):
+                target = directive["target"]
+                if target.lower() in ("everything", "all", "all memories", "all my memories", "everything about me", "everything you know about me"):
+                    mem_svc.clear_memories()
+                    answer_text = "### Memories Cleared\n\nI've cleared all persistent profile memories."
+                else:
+                    mem_svc.delete_memory_by_key(target)
+                    answer_text = (
+                        f"### Memory Removed\n\n"
+                        f"I've removed '{target}' from your persistent profile memory."
+                    )
+            elif directive["action"] == "clear":
+                mem_svc.clear_memories()
+                answer_text = "### Memories Cleared\n\nI've cleared all persistent profile memories."
+            elif directive["action"] == "list":
+                mems = mem_svc.list_memories()
+                if mems:
+                    mem_list = "\n".join(f"- **{m['key'].replace('_', ' ').title()}** ({m['category']}): {m['value']}" for m in mems)
+                    answer_text = (
+                        f"### Stored Profile Memories\n\n"
+                        f"Here is what I currently have saved in your persistent profile memory:\n\n"
+                        f"{mem_list}\n\n"
+                        f"You can ask me to update or forget any of these preferences at any time."
+                    )
+                else:
+                    answer_text = "### Stored Profile Memories\n\nI don't have any saved preferences or memories for you yet."
+            else:
+                answer_text = "Memory preferences updated."
+
+            asst_msg = ChatMessage(
+                session_id=session_id,
+                role="assistant",
+                content=answer_text,
+                sources=[],
+                metadata_json={"answer_method": "memory_directive", "data_status": "PROCESSED"},
+            )
+            self.db.add(asst_msg)
+            self.db.commit()
+            return {
+                "session_id": session_id,
+                "title": session.title or "New conversation",
+                "user_message_id": user_message_id,
+                "assistant_message_id": asst_msg.id,
+                "answer": answer_text,
+                "citations": [],
+                "structured_sources": [],
+                "data_status": "PROCESSED",
+                "answer_method": "memory_directive",
+                "model": ai_model,
+            }
+
+        if re.search(r"\b(?:what (?:do you remember|is in my memory|are my saved preferences)|show (?:my )?memories)\b", message, re.IGNORECASE):
+            mems = mem_svc.list_memories()
+            if mems:
+                mem_list = "\n".join(f"- **{m['key'].replace('_', ' ').title()}** ({m['category']}): {m['value']}" for m in mems)
+                answer_text = (
+                    f"### Stored Profile Memories\n\n"
+                    f"Here is what I currently have saved in your persistent profile memory:\n\n"
+                    f"{mem_list}\n\n"
+                    f"You can ask me to update or forget any of these preferences at any time."
+                )
+            else:
+                answer_text = (
+                    f"### Stored Profile Memories\n\n"
+                    f"I don't have any saved preferences or memories for you yet. "
+                    f"You can tell me things like 'remember that I prefer Indian stocks' or 'remember that my investment horizon is 5 years'."
+                )
+            asst_msg = ChatMessage(
+                session_id=session_id,
+                role="assistant",
+                content=answer_text,
+                sources=[],
+                metadata_json={"answer_method": "memory_query", "data_status": "PROCESSED"},
+            )
+            self.db.add(asst_msg)
+            self.db.commit()
+            return {
+                "session_id": session_id,
+                "title": session.title or "New conversation",
+                "user_message_id": user_message_id,
+                "assistant_message_id": asst_msg.id,
+                "answer": answer_text,
+                "citations": [],
+                "structured_sources": [],
+                "data_status": "PROCESSED",
+                "answer_method": "memory_query",
+                "model": ai_model,
+            }
+
+        user_memories = mem_svc.get_relevant_memories(message)
+
         try:
             result = asyncio.run(orchestrate_chat(
                 message=message,
@@ -296,6 +399,7 @@ class ChatService:
                 chart_view=chart_view,
                 on_token=token_callback,
                 web_crawl=web_crawl,
+                user_memories=user_memories,
             ))
         except OllamaError as exc:
             logger.warning("chat_generation_unavailable", extra={"session_id": session_id, "error_code": exc.code, "reason": str(exc)})
@@ -316,6 +420,7 @@ class ChatService:
             key: result.get(key) for key in (
                 "model", "data_timestamp", "retrieval", "sources_unverified", "format_unverified",
                 "numeric_validation", "answer_method", "data_status", "structured_analysis",
+                "structured_sources", "duration_seconds",
             )
         }
         asst_msg = ChatMessage(

@@ -14,4 +14,4 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     
     print(f"Starting secure server on http://{host}:{port}")
-    uvicorn.run("app.main:app", host=host, port=port, reload=False)
+    uvicorn.run("app.main:app", host=host, port=port, reload=True)

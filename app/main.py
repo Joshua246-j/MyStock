@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import market, documents, chat, settings, symbols, models, health, news, forecast
+from app.api.routes import market, documents, chat, settings, symbols, models, health, news, forecast, memory
 from app.db.cache import clear_expired
 from app.config import PROJECT_ROOT
 from app.config import OLLAMA_MODEL
@@ -99,6 +99,7 @@ app.include_router(symbols.router, prefix="/api")
 app.include_router(models.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
 app.include_router(forecast.router, prefix="/api")
+app.include_router(memory.router, prefix="/api")
 
 @app.get("/")
 def read_root():

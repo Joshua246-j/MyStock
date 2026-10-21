@@ -92,9 +92,10 @@ class ForecastDataAdapter:
             except Exception:
                 freshness_status = "UNKNOWN"
 
+        market_name = str(resolved.get("market", "us")).lower()
         metadata = {
             "symbol": resolved_symbol,
-            "market": resolved.get("market", "us"),
+            "market": market_name,
             "source": history_result.get("source", "market_service"),
             "data_status": history_result.get("data_status", freshness_status),
             "freshness": freshness_status,
@@ -103,7 +104,7 @@ class ForecastDataAdapter:
             "bar_count": len(clean_df),
             "period": period,
             "interval": interval,
-            "currency": resolved.get("currency", "USD" if resolved.get("market") != "india" else "INR"),
+            "currency": resolved.get("currency") or ("INR" if market_name == "india" else "USD"),
         }
 
         return {
@@ -114,20 +115,55 @@ class ForecastDataAdapter:
 
     @staticmethod
     def validate_and_normalize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
-        """Enforce strict OHLCV integrity: sort, deduplicate, validate ranges."""
+        """Enforce strict OHLCV integrity: sort, deduplicate, validate ranges.
+        
+        Flexible towards user-uploaded datasets with lowercase or alternative column names.
+        """
         if df.empty:
             raise DataQualityError("Historical bars dataframe is empty.")
 
-        date_col = "Date" if "Date" in df.columns else ("Datetime" if "Datetime" in df.columns else None)
-        if not date_col:
-            raise DataQualityError("Missing required date or datetime column.")
-
-        required_cols = {"Open", "High", "Low", "Close"}
-        if not required_cols.issubset(df.columns):
-            raise DataQualityError(f"Missing required price columns: {required_cols - set(df.columns)}")
-
         clean = df.copy()
-        clean["Date"] = pd.to_datetime(clean[date_col], errors="coerce", utc=True)
+        
+        # Case-insensitive column mapping
+        col_map = {}
+        for c in clean.columns:
+            low = str(c).strip().casefold()
+            if low in ("date", "datetime", "timestamp", "time"):
+                col_map[c] = "Date"
+            elif low in ("close", "price", "adj close", "adj_close", "last", "value"):
+                col_map[c] = "Close"
+            elif low in ("open", "open_price"):
+                col_map[c] = "Open"
+            elif low in ("high", "high_price", "max"):
+                col_map[c] = "High"
+            elif low in ("low", "low_price", "min"):
+                col_map[c] = "Low"
+            elif low in ("volume", "vol", "shares"):
+                col_map[c] = "Volume"
+        
+        clean = clean.rename(columns=col_map)
+
+        if "Date" not in clean.columns:
+            # Check if index is a datetime index
+            if isinstance(clean.index, pd.DatetimeIndex):
+                clean["Date"] = clean.index
+            else:
+                raise DataQualityError("Missing required date or datetime column in dataset.")
+
+        if "Close" not in clean.columns:
+            raise DataQualityError("Missing required price column ('Close' or 'Price') in dataset.")
+
+        # Synthesize missing Open, High, Low from Close if user uploaded single price series
+        if "Open" not in clean.columns:
+            clean["Open"] = clean["Close"]
+        if "High" not in clean.columns:
+            clean["High"] = clean["Close"]
+        if "Low" not in clean.columns:
+            clean["Low"] = clean["Close"]
+        if "Volume" not in clean.columns:
+            clean["Volume"] = 10000.0
+
+        clean["Date"] = pd.to_datetime(clean["Date"], errors="coerce", utc=True)
         clean = clean.dropna(subset=["Date"]).sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
 
         for col in ["Open", "High", "Low", "Close"]:
@@ -141,13 +177,9 @@ class ForecastDataAdapter:
         # OHLC logic check
         clean["High"] = np.maximum(clean["High"], np.maximum(clean["Open"], clean["Close"]))
         clean["Low"] = np.minimum(clean["Low"], np.minimum(clean["Open"], clean["Close"]))
+        clean["Volume"] = pd.to_numeric(clean["Volume"], errors="coerce").fillna(0.0).clip(lower=0.0)
 
-        if "Volume" in clean.columns:
-            clean["Volume"] = pd.to_numeric(clean["Volume"], errors="coerce").fillna(0.0).clip(lower=0.0)
-        else:
-            clean["Volume"] = 0.0
-
-        # Outlier unadjusted jump check (>100% in single day without split flag)
+        # Outlier unadjusted jump check
         log_returns = np.diff(np.log(clean["Close"].to_numpy()))
         if len(log_returns) > 0 and np.any(np.abs(log_returns) > 1.2):
             logger.warning("large_jump_detected", extra={"max_jump": float(np.max(np.abs(log_returns)))})
@@ -167,7 +199,7 @@ class ForecastDataAdapter:
         try:
             from app.market.news_providers import fetch_all_provider_feeds
             resolved = resolve_symbol(symbol)
-            market = resolved.get("market", "all")
+            market = str(resolved.get("market", "all")).lower()
             external_items = fetch_all_provider_feeds(market=market, max_workers=6, timeout=4.0)
             target = resolved["resolved_symbol"]
             bare = target.split(".")[0].casefold()
@@ -205,36 +237,37 @@ class ForecastDataAdapter:
 
         # 1. Authentic Yahoo Finance Analyst Consensus (Free Public Feed)
         yahoo_target = None
-        try:
-            import yfinance as yf
-            ticker = yf.Ticker(symbol)
-            info = ticker.info or {}
-            mean_target = info.get("targetMeanPrice")
-            high_target = info.get("targetHighPrice")
-            low_target = info.get("targetLowPrice")
-            rec_key = info.get("recommendationKey")
-            analyst_count = info.get("numberOfAnalystOpinions")
+        if symbol and not str(symbol).upper().startswith(("CUSTOM", "UPLOAD", "SYNTHETIC", "TEST")):
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker(symbol)
+                info = ticker.info or {}
+                mean_target = info.get("targetMeanPrice")
+                high_target = info.get("targetHighPrice")
+                low_target = info.get("targetLowPrice")
+                rec_key = info.get("recommendationKey")
+                analyst_count = info.get("numberOfAnalystOpinions")
 
-            if mean_target and float(mean_target) > 0 and current_price > 0:
-                mean_t = round(float(mean_target), 2)
-                implied_ret = round(((mean_t - current_price) / current_price) * 100.0, 2)
-                yahoo_target = {
-                    "available": True,
-                    "provider_name": "Yahoo Finance Analyst Consensus",
-                    "provider_type": "Free Public Sell-Side Consensus Feed",
-                    "target_price": mean_t,
-                    "target_high": round(float(high_target), 2) if high_target else None,
-                    "target_low": round(float(low_target), 2) if low_target else None,
-                    "implied_return_percent": implied_ret,
-                    "recommendation": str(rec_key).upper().replace("_", " ") if rec_key else "CONSENSUS",
-                    "analyst_count": int(analyst_count) if analyst_count else None,
-                    "reliability_level": "MODERATE_INFORMATIVE",
-                    "reliability_badge": "External Consensus (Free Tier)",
-                    "attribution": "Aggregated sell-side analyst price targets via Yahoo Finance public API.",
-                    "disclaimer": "Analyst targets represent subjective external estimates subject to lagging revisions.",
-                }
-        except Exception as exc:
-            logger.info("third_party_yahoo_consensus_fetch_skipped", extra={"symbol": symbol, "reason": str(exc)})
+                if mean_target and float(mean_target) > 0 and current_price > 0:
+                    mean_t = round(float(mean_target), 2)
+                    implied_ret = round(((mean_t - current_price) / current_price) * 100.0, 2)
+                    yahoo_target = {
+                        "available": True,
+                        "provider_name": "Yahoo Finance Analyst Consensus",
+                        "provider_type": "Free Public Sell-Side Consensus Feed",
+                        "target_price": mean_t,
+                        "target_high": round(float(high_target), 2) if high_target else None,
+                        "target_low": round(float(low_target), 2) if low_target else None,
+                        "implied_return_percent": implied_ret,
+                        "recommendation": str(rec_key).upper().replace("_", " ") if rec_key else "CONSENSUS",
+                        "analyst_count": int(analyst_count) if analyst_count else None,
+                        "reliability_level": "MODERATE_INFORMATIVE",
+                        "reliability_badge": "External Consensus (Free Tier)",
+                        "attribution": "Aggregated sell-side analyst price targets via Yahoo Finance public API.",
+                        "disclaimer": "Analyst targets represent subjective external estimates subject to lagging revisions.",
+                    }
+            except Exception as exc:
+                logger.info("third_party_yahoo_consensus_fetch_skipped", extra={"symbol": symbol, "reason": str(exc)})
 
         if yahoo_target:
             targets["analyst_consensus"] = yahoo_target

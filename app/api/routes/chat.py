@@ -149,7 +149,9 @@ def chat(req: ChatRequest, chat_service: ChatService = Depends(get_chat_service)
         "format_unverified": result.get("format_unverified"),
         "numeric_validation": result.get("numeric_validation"),
         "answer_method": result.get("answer_method"),
-        "data_status": result.get("data_status")
+        "data_status": result.get("data_status"),
+        "structured_sources": result.get("structured_sources") or [],
+        "duration_seconds": result.get("duration_seconds") or 0.0,
     }
 
 
@@ -196,6 +198,8 @@ async def stream_chat(req: ChatRequest):
                 "answer": result["answer"],
                 "structured_analysis": result.get("structured_analysis"),
                 "citations": result.get("citations"),
+                "structured_sources": result.get("structured_sources") or [],
+                "duration_seconds": result.get("duration_seconds") or 0.0,
                 "data_timestamp": result.get("data_timestamp"),
                 "model": result.get("model"),
                 "retrieval": result.get("retrieval"),

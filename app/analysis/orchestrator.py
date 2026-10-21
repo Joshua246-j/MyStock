@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.analysis.data_analysis import analyze_dataset
+from app.analysis.capabilities import is_capability_query, get_capability_context
 from app.ollama_client import OllamaClient, OllamaError
 from app.market.symbol_resolver import resolve_symbol, INDIAN_COMPANY_ALIASES
 from app.analysis.interfaces import IMarketData, IRetriever
@@ -231,20 +232,22 @@ def classify_intents(message: str, symbol: str | None, settings: dict[str, Any])
     if symbol and settings.get("automatic_news_retrieval", True) and _contains_any_phrase(text, ("news", "recent", "today", "happened", "latest")):
         intents.add("news")
     explicit_web_request = bool(URL_RE.search(message)) or bool(re.search(
-        r"\b(?:web|internet|online|search|look\s+up|browse|crawl)\b", text,
+        r"\b(?:web|internet|online|search|look\s*up|browse|crawl|crawler|site|sites|website|websites|source|sources|reddit|google|research|find\s*out|articles?|blogs?|reviews?|discussions?)\b", text,
     ))
     news_research_request = bool(re.search(
         r"\b(?:news|what happened|recent events|latest events|company announcement|press release)\b", text,
     ))
     web_lookup = explicit_web_request or (news_research_request and not document_context)
-    if settings.get("web_research_enabled", True) and web_lookup:
+    if (settings.get("web_research_enabled", True) and web_lookup) or "reddit" in text or "sources" in text or "sites" in text:
         intents.add("web_research")
     product_help = bool(re.search(
-        r"\b(?:what is stockrag|what does stockrag|how (?:do|can) i (?:use|upload|manage|select|change)|"
-        r"how to (?:use|upload|manage|select|change)|how does (?:the )?(?:app|stockrag)|"
+        r"\b(?:what is stockrag|what does stockrag|what is mystock|what does mystock|how (?:do|can) i (?:use|upload|manage|select|change)|"
+        r"how to (?:use|upload|manage|select|change)|how does (?:the )?(?:app|stockrag|mystock)|"
         r"where (?:do|can) i (?:upload|select)|how can (?:the )?chat)\b",
         text,
-    ))
+    )) or is_capability_query(text)
+    if product_help:
+        intents.add("general_chat")
     if not product_help and (document_context or any(term in text for term in ("document", "pdf", "uploaded", "report", "according to", "file"))):
         intents.add("document_qa")
     # Keep document retrieval available for analytical questions; general chat can still use it.
@@ -341,6 +344,7 @@ async def orchestrate_chat(
     retriever: IRetriever | None = None,
     prompt_builder: PromptBuilder | None = None,
     web_crawl: bool | None = None,
+    user_memories: list[dict[str, Any]] | None = None,
 ):
     from app.db.database import SessionLocal
     from app.db.models import UserSettings
@@ -401,10 +405,27 @@ async def orchestrate_chat(
         resolution = resolve_symbol(symbol)
         if resolution["valid"]:
             symbol = resolution["resolved_symbol"]
-    if not explicit_symbols:
+    if not symbol:
         for alias, resolved in sorted(INDIAN_COMPANY_ALIASES.items(), key=lambda item: len(item[0]), reverse=True):
             if re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", message, re.IGNORECASE):
                 symbol = resolved
+                break
+    if not symbol and history:
+        for item in reversed(history[-6:]):
+            hist_content = str(item.get("content", ""))
+            for cand in re.findall(r"(?<![A-Za-z0-9])[A-Z][A-Z0-9.-]{0,9}(?![A-Za-z0-9])", hist_content):
+                if cand not in excluded and not re.fullmatch(r"(?:FY)?\d{2,4}", cand) and not re.match(r"^(?:QWEN|GEMMA|LLAMA|NOMIC|MISTRAL|DEEPSEEK)\d", cand):
+                    res = resolve_symbol(cand)
+                    if res["valid"]:
+                        symbol = res["resolved_symbol"]
+                        break
+            if symbol:
+                break
+            for alias, res_sym in sorted(INDIAN_COMPANY_ALIASES.items(), key=lambda item: len(item[0]), reverse=True):
+                if re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", hist_content, re.IGNORECASE):
+                    symbol = res_sym
+                    break
+            if symbol:
                 break
     previous_user_message = _followup_context(message, history)
     retrieval_query = f"{previous_user_message}\nFollow-up: {message}" if previous_user_message else message
@@ -593,8 +614,6 @@ async def orchestrate_chat(
         else:
             results = await asyncio.gather(*(_thread_call(crawl_and_register, url, timeout=timeout) for url in urls[:3]), return_exceptions=True)
             direct_context = ""
-            direct_sources = []
-
         successful = [item for item in results if isinstance(item, dict) and item.get("success")]
         errors = search_errors + [str(item) if isinstance(item, Exception) else item.get("error") for item in results if isinstance(item, Exception) or not item.get("success")]
         crawled_ids = [item["document_id"] for item in successful]
@@ -602,8 +621,31 @@ async def orchestrate_chat(
         final_context = retrieved.get("context", "")
         if direct_context:
             final_context = direct_context if not final_context else f"{direct_context}\n\n{final_context}"
+
+        from urllib.parse import urlparse
+        url_structured = [
+            {
+                "title": (item.get("title") or u),
+                "url": u,
+                "publisher": (urlparse(u).hostname or "").removeprefix("www.").capitalize(),
+                "domain": (urlparse(u).hostname or "").removeprefix("www."),
+                "snippet": "",
+                "published_at": None,
+                "icon": "globe",
+            }
+            for item, u in zip(results, urls[:3])
+            if isinstance(item, dict) and item.get("success")
+        ]
+        all_web_sources = list(search_results) if search_results else url_structured
         final_sources = list(dict.fromkeys(retrieved.get("sources", []) + direct_sources))
-        return "web", {"crawled": len(successful) or len(search_results), "errors": errors, "context": final_context, "sources": final_sources, "retrieval_mode": retrieved.get("retrieval_mode") or "web_feed"}
+        return "web", {
+            "crawled": len(successful) or len(search_results),
+            "errors": errors,
+            "context": final_context,
+            "sources": final_sources,
+            "retrieval_mode": retrieved.get("retrieval_mode") or "web_feed",
+            "structured_sources": all_web_sources,
+        }
 
     tasks = []
     if "market_quote" in intents:
@@ -640,6 +682,7 @@ async def orchestrate_chat(
 
     context_sections: list[str] = []
     citations: list[str] = []
+    structured_sources_list: list[dict[str, Any]] = []
     retrieved_document_citations: list[str] = []
     retrieval_modes: list[str] = []
     quote_timestamp = None
@@ -664,23 +707,44 @@ async def orchestrate_chat(
             quote_timestamp = quote_timestamp or data.get("last_bar_at")
             llm_p = data.get("llm_payload", {})
             int_data = data.get("interval", {})
+            disag = data.get("disagreement", {})
+            opt_m = data.get("optimal_model", {})
             sig_list = [f"{s.get('feature')} ({s.get('direction', '')})" for s in data.get("signals", [])[:4]]
             sig_str = ", ".join(sig_list) if sig_list else "Momentum, Volatility"
+            emp_cov = int_data.get("empirical_coverage_percent")
+            emp_cov_str = f" (Empirical holdout coverage: {emp_cov}%)" if emp_cov is not None else ""
+            
+            disag_summary = (
+                f"- Multi-model disagreement & dispersion: {disag.get('label', 'Normal')} "
+                f"(Forecast spread: {disag.get('spread_percent', 0.0)}%, Vote: {disag.get('directional_consensus', 'Consensus')}). "
+                f"{disag.get('explanation', '')}"
+            ) if disag else ""
+
+            opt_str = (
+                f"- Optimal model by Min OOS MAE: {opt_m.get('name', 'N/A')} "
+                f"({'Currently Active' if opt_m.get('is_active') else 'Alternative Model: ' + str(opt_m.get('reason'))})"
+            ) if opt_m else ""
+
             context_sections.append(
                 f"VALIDATED PROBABILISTIC FORECAST ({symbol}; horizon={data.get('horizon')} sessions; "
                 f"current price={data.get('current_price')} {data.get('currency')}; as-of={data.get('last_bar_at')}; "
-                f"selected model={data.get('selected_model')}):\n"
+                f"selected model={data.get('selected_model')} [{llm_p.get('model_name')}]; "
+                f"data provider={data.get('data_source', 'yfinance')} [{data_status}]):\n"
                 f"- Expected return: {int_data.get('expected_return_percent')}%\n"
                 f"- Price estimate: {int_data.get('expected_price')} {data.get('currency')} "
-                f"(Calibrated {int_data.get('confidence_percent')}% interval: "
-                f"[{int_data.get('lower_bound_price')} – {int_data.get('upper_bound_price')}])\n"
-                f"- Directional probability: {llm_p.get('directional_probability_bullish_percent')}% Bullish\n"
-                f"- Walk-forward backtest metrics: OOS MAE = {llm_p.get('walk_forward_metrics', {}).get('mae_percent')}%, "
-                f"Directional accuracy = {llm_p.get('walk_forward_metrics', {}).get('directional_accuracy_percent')}%, "
-                f"Beats naive baseline = {llm_p.get('walk_forward_metrics', {}).get('beats_naive_baseline')}\n"
+                f"(Calibrated {int_data.get('confidence_percent')}% nominal conformal interval: "
+                f"[{int_data.get('lower_bound_price')} – {int_data.get('upper_bound_price')}]{emp_cov_str})\n"
+                f"- Directional tilt: {llm_p.get('directional_probability_bullish_percent')}% Bullish tilt "
+                f"(Directional label: {data.get('directional_label')})\n"
+                f"- Active model out-of-sample metrics: OOS MAE = {llm_p.get('walk_forward_metrics', {}).get('mae_percent')}%, "
+                f"Directional hit rate = {llm_p.get('walk_forward_metrics', {}).get('directional_accuracy_percent')}%, "
+                f"Outperforms naive baseline = {llm_p.get('walk_forward_metrics', {}).get('beats_naive_baseline')} "
+                f"({llm_p.get('walk_forward_metrics', {}).get('improvement_vs_naive_percent'):+.1f}% edge)\n"
+                f"{opt_str}\n"
+                f"{disag_summary}\n"
                 f"- Top driving signals: {sig_str}\n"
-                f"- Limitations: {data.get('disclaimer')}\n"
-                "INSTRUCTION: Preserve numerical values exactly. Explicitly acknowledge uncertainty and state that this is a probabilistic estimate."
+                f"- Limitations & Disclaimer: {data.get('disclaimer')}\n"
+                "INSTRUCTION: Preserve numerical values exactly. Explicitly acknowledge uncertainty, model disagreement, and empirical coverage. Do not represent the forecast as a guaranteed outcome."
             )
             citations.append(f"Probabilistic Forecast — {symbol} ({data.get('selected_model')}, {data.get('horizon')}-session horizon; as of {data.get('last_bar_at')})")
             market_sources += 1
@@ -694,6 +758,20 @@ async def orchestrate_chat(
                 context_sections.append("RECENT PUBLISHER HEADLINES (summaries are included only when the provider supplied them; these are not independently crawled full articles):\n" + "\n".join(f"- {n.get('title')} — {n.get('publisher')} (published {n.get('published_at') or 'date unavailable'}; retrieved {n.get('retrieved_at') or 'time unavailable'}). Provider summary: {n.get('summary') or 'not supplied'}. Source URL: {n.get('url') or 'unavailable'}" for n in news))
                 citations.extend(f"News — {n.get('publisher')}: {n.get('title')} (published {n.get('published_at') or 'date unavailable'}) — {n.get('url')}" for n in news)
                 market_sources += len(news)
+                from urllib.parse import urlparse
+                for n in news:
+                    if n.get("title"):
+                        u = n.get("url") or ""
+                        d = (urlparse(u).hostname or "").removeprefix("www.")
+                        structured_sources_list.append({
+                            "title": n.get("title"),
+                            "url": u,
+                            "publisher": n.get("publisher") or d.capitalize() or "News",
+                            "domain": d,
+                            "snippet": n.get("summary") or "",
+                            "published_at": n.get("published_at"),
+                            "icon": "newspaper"
+                        })
         elif kind == "documents":
             if data.get("error"):
                 failures.append(f"Document retrieval failed: {data['error']}")
@@ -712,7 +790,9 @@ async def orchestrate_chat(
                 retrieval_modes.append(data["retrieval_mode"])
             if data.get("context"):
                 context_sections.append("NEWLY CRAWLED WEB EVIDENCE:\n" + data["context"])
-                citations.extend(data.get("sources", []))
+            citations.extend(data.get("sources", []))
+            if data.get("structured_sources"):
+                structured_sources_list.extend(data.get("structured_sources", []))
             if data.get("errors"):
                 failures.extend(data["errors"])
         elif kind == "dataset" and data.get("success"):
@@ -738,14 +818,20 @@ async def orchestrate_chat(
     custom_persona = (settings.get("custom_persona") or "").strip()
     if custom_persona:
         detail_instruction = f"{detail_instruction}\n\nCustom Persona & Instructions:\n{custom_persona}"
+    if is_capability_query(message) or is_capability_query(retrieval_query):
+        cap_info = get_capability_context(message)
+        detail_instruction = f"{detail_instruction}\n\nApplication Capabilities & Boundaries Reference:\n{cap_info}"
     prompt_history = _trim_prompt_history(history, int(settings.get("context_size", 4096)))
     try:
-        messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction, local_model=selected_model, mode=mode)
+        messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction, local_model=selected_model, mode=mode, user_memories=user_memories)
     except TypeError:
         try:
-            messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction, local_model=selected_model)
+            messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction, local_model=selected_model, mode=mode)
         except TypeError:
-            messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction)
+            try:
+                messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction, local_model=selected_model)
+            except TypeError:
+                messages = prompt_builder.build(message, prompt_history, context_sections, detail_instruction)
 
     numeric_validation = "not_applicable"
     numeric_fallback = False
@@ -844,7 +930,7 @@ async def orchestrate_chat(
         )
         rag_grounding_fallback = True
 
-    format_required = bool((evidence_retrieved or dataset_path) and mode not in {"general"} and intents != {"general_chat"})
+    format_required = bool((evidence_retrieved or dataset_path) and mode not in {"general"} and intents != {"general_chat"} and "document_qa" in intents)
     missing_sections = _missing_research_sections(response, require_sources=bool(unique_citations), detail=response_detail) if format_required else []
 
     if response.startswith("Error:"):
@@ -865,6 +951,8 @@ async def orchestrate_chat(
         "answer": response,
         "structured_analysis": {"intents": sorted(intents), "evidence_types": [kind for kind, _ in evidence], "limitations": failures, "chart_context": {"symbol": symbol, "period": chart_period, "interval": chart_interval, "mode": chart_mode, "view": chart_view} if "technical" in intents and symbol else None},
         "citations": unique_citations,
+        "structured_sources": structured_sources_list,
+        "duration_seconds": max(0.5, round((finished - started).total_seconds(), 1)),
         "sources_unverified": citation_unverified or ("## Sources" in response and not unique_citations),
         "format_unverified": format_unverified,
         "numeric_validation": numeric_validation,
@@ -872,6 +960,6 @@ async def orchestrate_chat(
         "data_timestamp": quote_timestamp or finished.isoformat(),
         "model": None if numeric_fallback or rag_grounding_fallback or model_identity_unavailable else selected_model,
         "answer_method": "deterministic_model_metadata" if model_identity_answer else "deterministic_insufficient_evidence" if numeric_validation == "insufficient_evidence" else "deterministic_rag_insufficient_evidence" if rag_grounding_fallback else "extractive_source_fallback" if numeric_fallback else "model_generated",
-        "retrieval": {"sources": len(unique_citations), "documents": len(set(retrieved_document_citations) & set(unique_citations)), "web_sources": web_sources, "market_sources": market_sources, "document_modes": list(dict.fromkeys(retrieval_modes))},
+        "retrieval": {"sources": len(unique_citations), "documents": len(set(retrieved_document_citations) & set(unique_citations)), "web_sources": web_sources, "market_sources": market_sources, "document_modes": list(dict.fromkeys(retrieval_modes)), "web_sources_list": structured_sources_list},
         "request_started_at": started.isoformat(),
     }

@@ -56,11 +56,32 @@ class UncertaintyEngine:
         lower_return_pct = ((lower_price - current_price) / current_price) * 100.0 if current_price > 0 else 0.0
         upper_return_pct = ((upper_price - current_price) / current_price) * 100.0 if current_price > 0 else 0.0
 
+        # Compute genuine empirical coverage across the holdout validation residuals
+        if n_res > 0:
+            covered_count = int(np.sum((valid_residuals >= q_lower) & (valid_residuals <= q_upper)))
+            emp_cov_pct = round((covered_count / n_res) * 100.0, 1)
+        else:
+            covered_count = 0
+            emp_cov_pct = round(confidence_level * 100.0, 1)
+
+        cov_gap = round(emp_cov_pct - (confidence_level * 100.0), 1)
+        if abs(cov_gap) <= 5.0:
+            cal_verdict = "Well Calibrated"
+        elif cov_gap < -5.0:
+            cal_verdict = "Undercovering (Wider error tails)"
+        else:
+            cal_verdict = "Conservative (Overcovering)"
+
         return {
             "confidence_level": confidence_level,
             "confidence_percent": int(confidence_level * 100),
-            "method": method,
+            "nominal_confidence_percent": int(confidence_level * 100),
+            "empirical_coverage_percent": emp_cov_pct,
+            "empirical_covered_samples": covered_count,
             "residual_sample_size": n_res,
+            "coverage_gap_percent": cov_gap,
+            "calibration_verdict": cal_verdict,
+            "method": method,
             "expected_return_percent": round(float(expected_return_pct), 3),
             "expected_price": round(float(expected_price), 4),
             "lower_bound_price": round(float(lower_price), 4),

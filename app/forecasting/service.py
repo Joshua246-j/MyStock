@@ -13,6 +13,7 @@ from app.db.database import SessionLocal
 from app.db.models import ForecastRecord
 from app.forecasting.data_adapter import ForecastDataAdapter
 from app.forecasting.feature_engineering import build_features_and_targets
+from app.forecasting.disagreement import DisagreementEngine
 from app.forecasting.hardware import evaluate_model_availability, get_hardware_profile, get_model_suitability_specs
 from app.forecasting.models import (
     CustomQuantitativeForecaster,
@@ -212,7 +213,9 @@ class ForecastingService:
 
     def forecast(
         self,
-        symbol: str,
+        symbol: str | None = None,
+        custom_df: pd.DataFrame | None = None,
+        dataset_name: str | None = None,
         horizon: int = 5,
         model_name: str = "historical_drift",
         confidence: float = 0.80,
@@ -224,9 +227,10 @@ class ForecastingService:
         model_name = (model_name or "historical_drift").casefold()
         start_time = time.perf_counter()
 
-        cache_key = f"{symbol.upper()}:{horizon}:{model_name}:{confidence}"
+        symbol_key = (dataset_name or symbol or "CUSTOM").upper()
+        cache_key = f"{symbol_key}:{horizon}:{model_name}:{confidence}"
         now_ts = datetime.now(timezone.utc).timestamp()
-        if not refresh and cache_key in self._cache:
+        if not refresh and custom_df is None and cache_key in self._cache:
             ts, cached_res = self._cache[cache_key]
             if now_ts - ts < self._cache_ttl_seconds:
                 cached_res_copy = dict(cached_res)
@@ -234,28 +238,57 @@ class ForecastingService:
                 cached_res_copy["cached_at"] = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
                 return cached_res_copy
 
-        # 1. Fetch & normalize market data
-        period = "2y" if horizon <= 5 else "5y"
-        data_res = self.data_adapter.fetch_normalized_market_data(
-            symbol, period=period, interval="1d", refresh=refresh
-        )
-        if not data_res.get("success"):
-            return {
-                "success": False,
-                "status": data_res.get("status", "insufficient_data"),
-                "symbol": symbol,
-                "error": data_res.get("error", "Failed to retrieve market history"),
-                "abstain": True,
+        # 1. Fetch & normalize market data (or normalize user-uploaded dataset)
+        if custom_df is not None:
+            try:
+                clean_df = self.data_adapter.validate_and_normalize_ohlcv(custom_df)
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "status": "data_quality_failure",
+                    "symbol": symbol_key,
+                    "error": str(exc),
+                    "abstain": True,
+                }
+            df = clean_df
+            metadata = {
+                "symbol": symbol_key,
+                "market": "custom",
+                "source": "Uploaded Dataset",
+                "data_status": "FRESH",
+                "freshness": "FRESH",
+                "observation_timestamp": str(df["Date"].iloc[-1])[:10],
+                "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                "bar_count": len(df),
+                "period": "custom",
+                "interval": "1d",
+                "currency": "$",
+                "is_custom_dataset": True,
             }
-
-        df: pd.DataFrame = data_res["data"]
-        metadata: dict[str, Any] = data_res["metadata"]
+        else:
+            target_symbol = symbol or "AAPL"
+            period = "2y" if horizon <= 5 else "5y"
+            data_res = self.data_adapter.fetch_normalized_market_data(
+                target_symbol, period=period, interval="1d", refresh=refresh
+            )
+            if not data_res.get("success"):
+                return {
+                    "success": False,
+                    "status": data_res.get("status", "insufficient_data"),
+                    "symbol": target_symbol,
+                    "error": data_res.get("error", "Failed to retrieve market history"),
+                    "abstain": True,
+                }
+            df = data_res["data"]
+            metadata = data_res["metadata"]
         current_price = float(df["Close"].iloc[-1])
         last_date = df["Date"].iloc[-1]
         last_date_str = str(last_date)[:10]
 
-        # 2. Gather recent news
-        news_items = self.data_adapter.fetch_related_news(symbol, limit=25)
+        # 2. Gather recent news (only needed for multi-factor models using sentiment)
+        news_items = []
+        if model_name not in ("historical_drift", "naive_zero", "exponential_smoothing"):
+            news_items = self.data_adapter.fetch_related_news(symbol, limit=20)
 
         # 3. Build features & targets
         features_res = build_features_and_targets(df, news_items=news_items, horizons=[1, 5, 20])
@@ -282,37 +315,38 @@ class ForecastingService:
         y_eval = y_target[warmup_idx:]
         dates_eval = df["Date"].iloc[warmup_idx:].tolist()
 
-        validator = ChronologicalWalkForwardValidator(horizon=horizon, n_test_bars=30, min_train_bars=50)
+        validator = ChronologicalWalkForwardValidator(horizon=horizon, n_test_bars=15, min_train_bars=40)
+        # Standardized out-of-sample benchmark evaluating all models on identical splits
         benchmark_results = validator.benchmark_models(X_eval, y_eval, dates_eval)
 
         # 5. Model Selection
-        selected_model_key = model_name
-        models_bench = benchmark_results.get("models", {})
-
+        best_oos_model = benchmark_results.get("selected_best_model", "historical_drift")
         if model_name == "auto":
-            hgb_mae = models_bench.get("hist_gradient_boosting", {}).get("mae", float("inf"))
-            ridge_mae = models_bench.get("ridge", {}).get("mae", float("inf"))
-            drift_mae = models_bench.get("historical_drift", {}).get("mae", float("inf"))
-            naive_mae = models_bench.get("naive_zero", {}).get("mae", float("inf"))
-            rf_mae = models_bench.get("random_forest", {}).get("mae", float("inf"))
-            mlp_mae = models_bench.get("mlp_neural_net", {}).get("mae", float("inf"))
-            exp_mae = models_bench.get("exponential_smoothing", {}).get("mae", float("inf"))
+            selected_model_key = best_oos_model
+            selection_mode = "automatic_min_oos_mae"
+        else:
+            selected_model_key = model_name if model_name in MODEL_METADATA else "historical_drift"
+            selection_mode = "user_selected"
 
-            candidates = [
-                ("historical_drift", drift_mae),
-                ("ridge", ridge_mae),
-                ("hist_gradient_boosting", hgb_mae),
-                ("random_forest", rf_mae),
-                ("mlp_neural_net", mlp_mae),
-                ("exponential_smoothing", exp_mae),
-                ("naive_zero", naive_mae),
-            ]
-            valid_candidates = [c for c in candidates if np.isfinite(c[1]) and c[1] > 0]
-            if valid_candidates:
-                best_model, _ = min(valid_candidates, key=lambda item: item[1])
-                selected_model_key = best_model
+        benchmark_results["active_viewed_model"] = selected_model_key
+        benchmark_results["selection_mode"] = selection_mode
+        benchmark_results["selection_metric"] = "Min OOS MAE"
+
+        # Assign verified selection statuses to prevent misleading claims
+        models_bench = benchmark_results.get("models", {})
+        for k, m_dict in models_bench.items():
+            if k == selected_model_key and k == best_oos_model:
+                m_dict["selection_status"] = "Selected (Best OOS MAE)"
+            elif k == selected_model_key:
+                m_dict["selection_status"] = "Active Selection (User)"
+            elif k == best_oos_model:
+                m_dict["selection_status"] = "Optimal (Min OOS MAE)"
+            elif k == "naive_zero":
+                m_dict["selection_status"] = "Persistence Baseline"
+            elif m_dict.get("available"):
+                m_dict["selection_status"] = "Evaluated"
             else:
-                selected_model_key = "historical_drift"
+                m_dict["selection_status"] = m_dict.get("status", "Unavailable")
 
         # Model instance mapping
         def create_model(key: str):
@@ -486,10 +520,12 @@ class ForecastingService:
             "random_forest": RandomForestReturnForecaster(),
             "mlp_neural_net": MLPNeuralReturnForecaster(),
         }
+        cand_predictions: dict[str, float] = {}
         for cand_key, cand_model in candidate_instances.items():
             try:
                 cand_model.fit(X_train_final, y_train_final)
                 cand_pred = float(cand_model.predict(latest_X)[0])
+                cand_predictions[cand_key] = cand_pred
                 c_target = round(float(current_price * np.exp(cand_pred)), 4)
                 c_ret_pct = round(((c_target - current_price) / current_price) * 100.0, 2)
                 c_path = [{"date": last_date_str, "price": current_price, "step": 0}]
@@ -510,6 +546,18 @@ class ForecastingService:
                 }
             except Exception:
                 pass
+
+        # Disagreement and dispersion analysis across candidate models
+        vol_20d = float(latest_row.get("volatility_20d", 0.015)) if "volatility_20d" in latest_row else 0.015
+        horizon_vol = vol_20d * np.sqrt(horizon)
+        model_names_map = {k: v.get("name", k) for k, v in MODEL_METADATA.items()}
+        disagreement_analysis = DisagreementEngine.evaluate_disagreement(
+            model_predictions=cand_predictions,
+            reference_price=current_price,
+            horizon=horizon,
+            realized_volatility=horizon_vol,
+            model_names=model_names_map,
+        )
 
         # 3rd-party analyst consensus & deterministic pivot baseline
         third_party_data = self.data_adapter.fetch_third_party_targets(
@@ -572,6 +620,7 @@ class ForecastingService:
             "upper_price": upper_price,
             "projection_path": projection_path,
             "model_projections": multi_model_projections,
+            "disagreement": disagreement_analysis,
         }
 
         # 11. Factor Categories Allocation
@@ -678,9 +727,14 @@ class ForecastingService:
             "projected_target_date": projected_date_str,
             "selected_model": selected_model_key,
             "model_name": MODEL_METADATA.get(selected_model_key, {}).get("name", selected_model_key),
+            "optimal_model_by_oos_mae": best_oos_model,
+            "optimal_model_name": MODEL_METADATA.get(best_oos_model, {}).get("name", best_oos_model),
+            "is_optimal_selected": selected_model_key == best_oos_model,
             "expected_return_percent": interval_data["expected_return_percent"],
             "expected_price": expected_price,
-            "confidence_level_percent": interval_data["confidence_percent"],
+            "nominal_confidence_percent": interval_data.get("nominal_confidence_percent", interval_data.get("confidence_percent")),
+            "empirical_coverage_percent": interval_data.get("empirical_coverage_percent"),
+            "calibration_verdict": interval_data.get("calibration_verdict"),
             "lower_bound_price": lower_price,
             "upper_bound_price": upper_price,
             "directional_probability_bullish_percent": round(directional_prob * 100.0, 1),
@@ -691,6 +745,16 @@ class ForecastingService:
                 "directional_accuracy_percent": val_metrics.get("directional_accuracy_percent", 50.0),
                 "beats_naive_baseline": val_metrics.get("beats_naive_baseline", False),
                 "improvement_vs_naive_percent": val_metrics.get("improvement_vs_naive_percent", 0.0),
+            },
+            "disagreement_analysis": {
+                "regime": disagreement_analysis.get("regime"),
+                "label": disagreement_analysis.get("label"),
+                "directional_consensus": disagreement_analysis.get("directional_consensus"),
+                "spread_percent": disagreement_analysis.get("spread_percent"),
+                "dispersion_percent": disagreement_analysis.get("dispersion_percent"),
+                "is_dependable_consensus": disagreement_analysis.get("is_dependable_consensus"),
+                "outliers": disagreement_analysis.get("outliers", []),
+                "summary": disagreement_analysis.get("explanation"),
             },
             "top_signals": enriched_signals[:6],
             "third_party_summary": {
@@ -713,6 +777,22 @@ class ForecastingService:
             ),
         }
 
+        # Provide clean history bars for direct charting in frontend (especially custom datasets)
+        history_bars = []
+        recent_bars = df.tail(120)
+        for _, r in recent_bars.iterrows():
+            d_str = str(r["Date"])[:10]
+            c_val = round(float(r["Close"]), 4)
+            history_bars.append({
+                "time": d_str,
+                "Date": d_str,
+                "open": round(float(r.get("Open", c_val)), 4),
+                "high": round(float(r.get("High", c_val)), 4),
+                "low": round(float(r.get("Low", c_val)), 4),
+                "close": c_val,
+                "volume": float(r.get("Volume", 0)),
+            })
+
         result = {
             "success": True,
             "status": "success",
@@ -722,6 +802,13 @@ class ForecastingService:
             "horizon": horizon,
             "selected_model": selected_model_key,
             "model_name": MODEL_METADATA.get(selected_model_key, {}).get("name", selected_model_key),
+            "optimal_model": {
+                "id": best_oos_model,
+                "name": MODEL_METADATA.get(best_oos_model, {}).get("name", best_oos_model),
+                "is_active": selected_model_key == best_oos_model,
+                "metric": "Min OOS MAE",
+                "reason": benchmark_results.get("selection_reason", ""),
+            },
             "model_metadata": model_availability_catalog,
             "current_price": current_price,
             "currency": metadata.get("currency", "USD"),
@@ -733,6 +820,8 @@ class ForecastingService:
             "directional_probability": round(directional_prob, 4),
             "directional_label": "BULLISH" if directional_prob > 0.52 else ("BEARISH" if directional_prob < 0.48 else "NEUTRAL"),
             "chart_data": chart_payload,
+            "history_bars": history_bars,
+            "disagreement": disagreement_analysis,
             "validation": val_metrics,
             "benchmark_comparison": benchmark_results,
             "signals": enriched_signals[:8],

@@ -31,9 +31,19 @@
   - Enforces strict chronological train/test splits with multi-session embargo gaps.
   - Eliminates lookahead bias and target leakage.
   - Automatically computes out-of-sample MAE, RMSE, and Directional Hit Rates against the Naive Baseline.
-- **Calibrated Conformal Uncertainty Bands**:
-  - Non-parametric empirical residual quantile intervals (80%, 90%, 95% confidence cones).
-  - Explicit interval expansion during market staleness or elevated volatility regimes.
+- **Statistical Ensemble Disagreement Engine**:
+  - Quantifies dispersion across all candidate models ($1\text{D}, 5\text{D}, 20\text{D}$ horizons) relative to realized asset volatility.
+  - Classifies disagreement into 4 distinct regimes (`LOW_DISAGREEMENT`, `MODERATE_DISAGREEMENT`, `HIGH_DISAGREEMENT`, `EXTREME_DISPERSION`).
+  - Automatically identifies statistical prediction outliers via Median Absolute Deviation (MAD) and Interquartile Range (IQR).
+  - Produces honest, non-smoothed dependability verdicts with actionable narratives when models diverge.
+- **Calibrated Conformal Uncertainty & Empirical Coverage**:
+  - Non-parametric empirical residual quantile intervals (80%, 90%, 95% nominal confidence cones).
+  - Explicit holdout empirical coverage tracking (`empirical_coverage_percent`, `nominal_confidence_percent`, and calibration verdict) to ensure nominal bands actually match observed error distributions without false confidence claims.
+  - Distinct separation of nominal prediction intervals, empirical coverage, model performance, and directional tilt.
+- **Honest Chronological Model Selection & Benchmark Truthfulness**:
+  - Strictly identifies `Selected (Min OOS MAE)` using genuine out-of-sample holdout backtesting across purged embargo windows.
+  - Distinguishes optimal quantitative models from user manual overrides (`Active Selection (User)` vs `Optimal (Min OOS MAE)`).
+  - Zero synthetic formula substitution or metric faking.
 - **Principled Uncertainty & Abstention Policy**:
   - Refuses to fabricate financial targets if historical data is insufficient or if a model demonstrates out-of-sample error >15% worse than persistence.
   - Issues transparent, auditable abstention warnings explaining the exact statistical failure boundary.
