@@ -50,11 +50,14 @@ class MarketDataService:
         
         cached_data = None if force_refresh else self.cache.get(cache_key)
         if cached_data:
+            cached_data = dict(cached_data)
             if fetch_func_name == "get_quote":
-                provider_status = cached_data.get("data_status")
-                if provider_status:
+                provider_status = cached_data.get("provider_data_status") or cached_data.get("data_status")
+                if provider_status and provider_status != "CACHED":
                     cached_data["provider_data_status"] = provider_status
                 cached_data["data_status"] = "CACHED"
+                if not cached_data.get("cached_at") and cached_data.get("retrieved_at"):
+                    cached_data["cached_at"] = cached_data["retrieved_at"]
             cached_data["status"] = "CACHED"
             return cached_data
             
@@ -178,6 +181,8 @@ class MarketDataService:
                 data["market"] = res["market"]
                 if data.get("success") and not data.get("status") and data.get("data_status"):
                     data["status"] = data["data_status"]
+                if fetch_func_name == "get_quote" and not data.get("cached_at"):
+                    data["cached_at"] = data.get("retrieved_at")
             self.cache.set(cache_key, data, ttl_seconds=ttl, source=data.get("source", "unknown") if isinstance(data, dict) else "unknown")
         return data
 

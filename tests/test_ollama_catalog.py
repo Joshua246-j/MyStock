@@ -65,3 +65,59 @@ def test_cancelled_catalog_waiter_does_not_cancel_shared_fetch(monkeypatch):
     result = asyncio.run(run())
     assert result["models"] == ["qwen2.5:1.5b"]
     assert calls == 1
+
+
+def test_list_running_models_success(monkeypatch):
+    import httpx
+
+    class DummyResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"models": [{"name": "qwen2.5:1.5b:latest"}, {"model": "nomic-embed-text:latest"}]}
+
+    class DummyAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, url):
+            return DummyResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", DummyAsyncClient)
+    client = OllamaClient()
+    res = asyncio.run(client.list_running_models())
+    assert res["available"] is True
+    assert "qwen2.5:1.5b:latest" in res["models"]
+    assert "nomic-embed-text:latest" in res["models"]
+
+
+def test_list_running_models_error(monkeypatch):
+    import httpx
+
+    class FailingAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, url):
+            raise httpx.ConnectError("Connection refused")
+
+    monkeypatch.setattr(httpx, "AsyncClient", FailingAsyncClient)
+    client = OllamaClient()
+    res = asyncio.run(client.list_running_models())
+    assert res["available"] is False
+    assert res["models"] == []
+    assert "Connection refused" in res["error"]
+

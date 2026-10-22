@@ -102,14 +102,29 @@ async def health_check(include_external: bool = True):
     except Exception:
         logger.exception("database_health_check_failed")
 
-    chat_warmed = _warmed_chat_model == model
+    chat_generation_verified = _warmed_chat_model == model
+    try:
+        running_catalog = await asyncio.wait_for(
+            ollama_client.list_running_models(min(timeout, 2)), timeout=min(timeout, 3)
+        )
+    except asyncio.TimeoutError:
+        running_catalog = {"available": False, "models": []}
+    running_models = running_catalog.get("models", [])
+    chat_model_loaded = running_catalog.get("available") is True and any(
+        name == model or name.startswith(model + ":") for name in running_models
+    )
+    chat_warmed = chat_generation_verified and chat_model_loaded
     retrieval_ok = bool(faiss_ok or lexical_ok)
-    ready = bool(database_ok and model_ok and embedding_ok and chat_warmed and retrieval_ok)
+    # Ollama unloads idle models to release RAM. A model proven during this
+    # process remains ready to load on demand; report runner residency separately.
+    ready = bool(database_ok and model_ok and embedding_ok and chat_generation_verified and retrieval_ok)
     return {
         "application": "running" if ready else "degraded",
         "status": "ready" if ready else "not_ready",
         "ready": ready,
         "chat_model_warmed": chat_warmed,
+        "chat_model_loaded": chat_model_loaded,
+        "chat_model_generation_verified": chat_generation_verified,
         "database": "available" if database_ok else "unavailable",
         "ollama": "connected" if ollama_ok else "disconnected",
         "model": model,
@@ -146,12 +161,12 @@ async def liveness_check():
 async def readiness_check(response: Response):
     """Report ready only when the configured chatbot model, embedding model, and DB respond."""
     details = await health_check(include_external=False)
-    if details.get("model_available") and not details.get("chat_model_warmed"):
+    if details.get("model_available") and not details.get("chat_model_generation_verified"):
         # Serialize fallback warmups so simultaneous health probes cannot
         # start competing model generations on memory-constrained machines.
         async with _readiness_warmup_lock:
             details = await health_check(include_external=False)
-            if details.get("model_available") and not details.get("chat_model_warmed"):
+            if details.get("model_available") and not details.get("chat_model_generation_verified"):
                 # Let the application startup warmup finish before attempting
                 # the fallback generation. It uses the same context size.
                 for _ in range(1200):
@@ -159,7 +174,7 @@ async def readiness_check(response: Response):
                         break
                     await asyncio.sleep(0.25)
                 details = await health_check(include_external=False)
-            if details.get("model_available") and not details.get("chat_model_warmed"):
+            if details.get("model_available") and not details.get("chat_model_generation_verified"):
                 set_chat_model_warming(True)
                 try:
                     answer = await ollama_client.chat(

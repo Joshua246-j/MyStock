@@ -136,6 +136,19 @@ class OllamaClient:
         names = catalog.get("embedding_models" if capability == "embedding" else "models", [])
         return catalog.get("available") is True and any(name == selected_model or name.startswith(selected_model + ":") for name in names)
 
+    async def list_running_models(self, timeout: float = 3):
+        """Return models currently resident in Ollama, separately from installed models."""
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(f"{self.base_url}/api/ps")
+                response.raise_for_status()
+                items = response.json().get("models", [])
+                names = sorted({str(item.get("name") or item.get("model") or "").strip()
+                                for item in items if isinstance(item, dict)})
+                return {"available": True, "models": [name for name in names if name]}
+        except (httpx.HTTPError, ValueError) as exc:
+            return {"available": False, "models": [], "error": str(exc)}
+
     async def list_models(self, timeout: float = 5):
         cache_key = (id(asyncio.get_running_loop()), self.base_url)
         cached = _MODEL_CATALOG_CACHE.get(cache_key)

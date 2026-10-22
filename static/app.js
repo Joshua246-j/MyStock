@@ -1292,10 +1292,12 @@
             source.className = 'max-w-[48%] truncate rounded-full px-2 py-0.5 text-[9px] font-semibold border flex items-center shrink-0';
             if (quote) {
                 const releaseDate = quote.market_time ? new Date(quote.market_time) : null;
-                const releaseFmt = releaseDate ? `${releaseDate.toLocaleDateString([], {month:'short',day:'numeric'})} ${releaseDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : 'Session Close';
+                const releaseFmt = releaseDate && !isNaN(releaseDate.getTime()) ? `${releaseDate.toLocaleDateString([], {month:'short',day:'numeric'})} ${releaseDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : 'Session Close';
+                const retrievedDate = (quote.cached_at || quote.retrieved_at) ? new Date(quote.cached_at || quote.retrieved_at) : null;
+                const retrievedFmt = retrievedDate && !isNaN(retrievedDate.getTime()) ? `${retrievedDate.toLocaleDateString([], {month:'short',day:'numeric'})} ${retrievedDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : '';
                 if (quote.status === 'CACHED' || quote.data_status === 'CACHED') {
                     source.className += ' bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
-                    source.textContent = `Cached · ${(quote.data_status || 'provider status unknown').replaceAll('_',' ')}`;
+                    source.textContent = `Cached · ${retrievedFmt || releaseFmt}`;
                 } else if (quote.data_status === 'PROVIDER_QUOTE' || quote.market_session === 'REGULAR_MARKET_OPEN') {
                     source.className += ' bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
                     source.textContent = `Market open · provider quote · ${quote.exchange || 'MKT'}`;
@@ -1304,9 +1306,9 @@
                     source.textContent = `Provider close · ${releaseFmt}`;
                 } else {
                     source.className += ' bg-black/[.04] text-apple-gray border-black/[.06] dark:bg-white/[.06] dark:border-white/[.08]';
-                source.textContent = (quote.status || quote.data_status || 'Freshness unknown').replaceAll('_',' ');
+                    source.textContent = (quote.status || quote.data_status || 'Freshness unknown').replaceAll('_',' ');
                 }
-                source.title = `Exchange: ${quote.exchange || 'Unknown'} | Market Recorded: ${quote.market_time || 'Time unavailable'} | Provider: ${quote.source || 'Unknown'} | Retrieved: ${quote.retrieved_at || 'Time unavailable'}`;
+                source.title = `Exchange: ${quote.exchange || 'Unknown'} | Market Recorded: ${quote.market_time || 'Time unavailable'} | Provider: ${quote.source || 'Unknown'} | Retrieved: ${quote.retrieved_at || 'Time unavailable'}${quote.cached_at ? ` | Cached: ${quote.cached_at}` : ''}`;
             } else {
                 source.className += ' bg-rose-500/10 text-rose-600 border-rose-500/20';
                 source.textContent = 'Unavailable';
@@ -1371,8 +1373,18 @@
                 change.textContent = Number.isFinite(pct) ? `${pct >= 0 ? '+' : ''}${formatMarketNumber(pct)}%` : '—';
                 change.className = Number.isFinite(pct) ? pct >= 0 ? 'text-emerald-600' : 'text-rose-600' : 'text-apple-gray';
                 const volume = document.createElement('td'); volume.textContent = quote ? formatMarketNumber(quote.volume,0) : '—';
-                const trend = document.createElement('td'); trend.textContent = result?.rows?.length ? `${result.rows.length} sessions` : 'Unavailable';
-                const freshness = document.createElement('td'); freshness.textContent = quote?.status || quote?.data_status || 'Unavailable'; freshness.className = 'text-[10px] text-apple-gray';
+                const cachedTime = quote?.cached_at || quote?.retrieved_at || quote?.market_time;
+                let timeStr = '';
+                if (cachedTime) {
+                    const dt = new Date(cachedTime);
+                    if (!isNaN(dt.getTime())) {
+                        timeStr = ` (${dt.toLocaleDateString([], {month:'short',day:'numeric'})} ${dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})})`;
+                    }
+                }
+                const isCached = quote?.status === 'CACHED' || quote?.data_status === 'CACHED';
+                const freshness = document.createElement('td');
+                freshness.textContent = isCached ? `Cached${timeStr}` : (quote?.data_status || quote?.status || 'Unavailable').replaceAll('_', ' ');
+                freshness.className = 'text-[10px] text-apple-gray';
                 row.append(company,price,change,volume,trend,freshness); body.append(row);
             }
         }
@@ -2542,14 +2554,17 @@
 
                         document.getElementById('stock-exchange').textContent = quote.exchange ? `${quote.exchange} · ${quote.exchange_timezone || ''}` : 'MKT';
                         const marketReleaseStr = quote.market_time ? `As of ${new Date(quote.market_time).toLocaleDateString([], {month:'short',day:'numeric',year:'numeric'})} ${new Date(quote.market_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} (${quote.exchange_timezone || 'Exchange Time'})` : 'Exchange recorded session';
-                        const retrievedStr = quote.retrieved_at ? ` · retrieved ${new Date(quote.retrieved_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : '';
+                        const retrievedDate = quote.retrieved_at ? new Date(quote.retrieved_at) : null;
+                        const retrievedStr = retrievedDate && !isNaN(retrievedDate.getTime()) ? ` · retrieved ${retrievedDate.toLocaleDateString([], {month:'short',day:'numeric'})} ${retrievedDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : '';
                         document.getElementById('quote-data-source').textContent = `${quote.source || 'Yahoo Finance'} · ${marketReleaseStr}${retrievedStr}`;
                         
                         const statusBadge = document.getElementById('stock-status');
                         statusBadge.classList.remove('hidden');
                         if (quote.status === 'CACHED' || quote.data_status === 'CACHED') {
                             statusBadge.className = 'px-3 py-1 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 uppercase';
-                            statusBadge.textContent = `CACHED · ${(quote.data_status || 'STATUS UNKNOWN').replaceAll('_', ' ')}`;
+                            const origStatus = (quote.provider_data_status || quote.market_session || '').replaceAll('_', ' ').trim();
+                            const timeFmt = retrievedDate && !isNaN(retrievedDate.getTime()) ? ` · ${retrievedDate.toLocaleDateString([], {month:'short',day:'numeric'})} ${retrievedDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : '';
+                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>CACHED${origStatus ? ` (${origStatus})` : ''}${timeFmt}`;
                         } else if (['PROVIDER_CLOSE','OFFICIAL_CLOSE'].includes(quote.data_status)) {
                             statusBadge.className = 'px-3 py-1 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 uppercase';
                             statusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>PROVIDER CLOSE`;
@@ -4699,7 +4714,8 @@
                 const data = await res.json();
                 
                 if (data.success && data.data && data.data.length > 0) {
-                    document.getElementById('chart-source-status').textContent = `${data.source || 'Provider unknown'} · ${data.data_status || 'historical data'} · ${period} / ${interval} · last bar ${data.last_bar_at || data.data.at(-1)?.Date || 'unknown'}`;
+                    const histRetrieved = data.timestamp ? ` · recorded ${new Date(data.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : '';
+                    document.getElementById('chart-source-status').textContent = `${data.source || 'Provider unknown'} · ${(data.data_status || 'historical data').replaceAll('_', ' ')} · ${period} / ${interval} · last bar ${data.last_bar_at || data.data.at(-1)?.Date || 'unknown'}${histRetrieved}`;
                     latestHistoryData = data.data;
                     latestIndicatorData = data.indicators?.data || [];
                     renderChart(latestHistoryData, latestIndicatorData, analysisView);
