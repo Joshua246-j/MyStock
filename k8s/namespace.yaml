@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stockrag
+  labels:
+    app.kubernetes.io/name: stockrag
+    app.kubernetes.io/part-of: mystock-ai

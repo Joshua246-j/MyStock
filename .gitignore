@@ -11,3 +11,4 @@ uploads/
 node_modules/
 .audit-run/
 data/*.db
+k8s/secret.yaml

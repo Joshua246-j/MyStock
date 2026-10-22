@@ -245,6 +245,37 @@ The interactive OpenAPI documentation and Swagger schema are accessible live at 
 
 ---
 
+## 🐳 Containerization & Kubernetes Deployment
+
+MyStock AI Terminal supports full containerized execution via Docker, Docker Compose, and Kubernetes (Minikube).
+
+### Docker Compose (Quickstart)
+
+```bash
+# Start backend API and Ollama services
+docker compose up -d
+
+# Verify deployment health
+python scripts/verify_deployment.py --url http://localhost:8000
+```
+
+### Kubernetes (Minikube)
+
+```bash
+# Start Minikube cluster
+minikube start --cpus=4 --memory=8192
+
+# Apply all manifests using Kustomize
+kubectl apply -k k8s/
+
+# Access terminal via NodePort
+minikube service stock-terminal -n stockrag
+```
+
+For detailed architecture diagrams, persistent storage volume management, non-root security context, and operations playbooks, see the [Deployment Guide](docs/DEPLOYMENT.md).
+
+---
+
 ## 🛡️ License & Compliance
 
 - **Software License**: Distributed under the MIT License. See `LICENSE` for details.

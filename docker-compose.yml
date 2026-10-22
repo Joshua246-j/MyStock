@@ -1,0 +1,82 @@
+services:
+  # Local Ollama service for AI inference and vector embeddings
+  ollama:
+    image: ollama/ollama:latest
+    container_name: stockrag-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - stockrag-network
+
+  # Stock Terminal FastAPI backend + self-contained frontend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stockrag-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:1.5b}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
+      - FAISS_PATH=/app/data/faiss
+      - DB_PATH=sqlite:////app/data/stock_terminal.db
+      - UPLOAD_DIR=/app/uploads
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - AUTH_ENABLED=${AUTH_ENABLED:-false}
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-admin}
+      - UPSTOX_ACCESS_TOKEN=${UPSTOX_ACCESS_TOKEN:-}
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-}
+    volumes:
+      - stockrag_data:/app/data
+      - stockrag_uploads:/app/uploads
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - stockrag-network
+
+  # Optional one-shot helper to download models on demand:
+  # Run via: docker compose --profile init up ollama-init
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: stockrag-ollama-init
+    profiles:
+      - init
+    restart: "no"
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull ${OLLAMA_MODEL:-qwen2.5:1.5b} && ollama pull ${EMBEDDING_MODEL:-nomic-embed-text}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - stockrag-network
+
+volumes:
+  stockrag_data:
+    name: stockrag_data
+  stockrag_uploads:
+    name: stockrag_uploads
+  ollama_data:
+    name: stockrag_ollama_data
+
+networks:
+  stockrag-network:
+    name: stockrag-network
+    driver: bridge

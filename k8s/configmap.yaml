@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stockrag-config
+  namespace: stockrag
+  labels:
+    app.kubernetes.io/name: stockrag
+    app.kubernetes.io/component: config
+data:
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  LOG_LEVEL: "INFO"
+  # Internal Kubernetes service DNS for Ollama within the stockrag namespace
+  OLLAMA_BASE_URL: "http://ollama.stockrag.svc.cluster.local:11434"
+  OLLAMA_MODEL: "qwen2.5:1.5b"
+  EMBEDDING_MODEL: "nomic-embed-text"
+  FAISS_PATH: "/app/data/faiss"
+  DB_PATH: "sqlite:////app/data/stock_terminal.db"
+  UPLOAD_DIR: "/app/uploads"
+  AUTH_ENABLED: "false"

@@ -110,7 +110,9 @@ class YahooApiProvider(MarketDataProvider):
             
             history = []
             for i in range(len(timestamps)):
-                if closes[i] is None:
+                if opens[i] is None or highs[i] is None or lows[i] is None or closes[i] is None:
+                    continue
+                if min(opens[i], highs[i], lows[i], closes[i]) <= 0:
                     continue
                 dt = datetime.fromtimestamp(timestamps[i]).strftime('%Y-%m-%d')
                 history.append({

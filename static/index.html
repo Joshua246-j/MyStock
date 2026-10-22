@@ -1,9 +1,36 @@
 <!DOCTYPE html>
-<html lang="en" class="antialiased light">
+<html lang="en" class="antialiased light" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>MyStock AI — Market Research Terminal</title>
+    <meta name="description" content="MyStock AI — Local-first market research terminal combining real-time market data, technical analytics, document RAG, and probabilistic ML forecasting.">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="MyStock AI — Market Research Terminal">
+    <meta property="og:description" content="Local-first market research terminal combining real-time data, technical analytics, document RAG, and probabilistic ML forecasting.">
+    <!-- Production SVG Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230071e3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='22 12 18 12 15 21 9 3 6 12 2 12'/%3E%3C/svg%3E">
+    <!-- Immediate theme initializer (avoids theme flash before CSS/JS load) -->
+    <script>
+        (function() {
+            try {
+                var saved = localStorage.getItem('stockrag.theme');
+                var isDark = saved ? saved === 'dark' : (Boolean(window.matchMedia) ? window.matchMedia('(prefers-color-scheme: dark)').matches : false);
+                var root = document.documentElement;
+                root.dataset.theme = isDark ? 'dark' : 'light';
+                if (isDark) {
+                    root.classList.add('dark');
+                    root.classList.remove('light');
+                } else {
+                    root.classList.add('light');
+                    root.classList.remove('dark');
+                }
+            } catch (_) {}
+        })();
+    </script>
     <!-- Built locally so the interface does not depend on a CSS CDN. -->
     <link rel="stylesheet" href="/static/tailwind.css?v=20261010-3">
     <script defer src="/static/vendor/marked.js"></script>
@@ -11,7 +38,7 @@
     <script defer src="/static/vendor/lucide.js"></script>
     <script defer src="/static/vendor/lightweight-charts.js"></script>
     
-    <link rel="stylesheet" href="/static/index.css?v=20261015-2">
+    <link rel="stylesheet" href="/static/index.css?v=20261021-3">
 </head>
 <body class="h-screen w-full flex flex-col overflow-hidden selection:bg-apple-blue selection:text-white">
 
@@ -149,7 +176,7 @@
 
             <!-- Chat Controls: New Chat -->
             <div class="p-3 pb-2 shrink-0 border-b border-black/5 dark:border-white/5">
-                <button type="button" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-apple-blue text-white hover:bg-blue-600 font-semibold text-xs transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]" onclick="showView('ai'); resetChatSession(); if(window.innerWidth < 768) toggleSidebar(false);" title="Start new conversation">
+                <button type="button" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-apple-blue text-white hover:bg-blue-600 font-semibold text-xs transition-all shadow-md shadow-blue-500/20 active:scale-[0.98]" onclick="startNewChat()" title="Start new conversation">
                     <span class="flex items-center gap-2">
                         <i data-lucide="plus" class="w-4 h-4"></i>
                         <span>New chat</span>
@@ -199,7 +226,7 @@
                 <div id="empty-state" class="mx-auto max-w-[1500px] space-y-7 animate-fade-in">
                     <section class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
                         <div><p class="mb-2 text-xs font-semibold uppercase tracking-[.18em] text-apple-blue">MyStock AI · Research terminal</p><h1 class="text-3xl font-semibold tracking-tight md:text-4xl">Markets at a glance</h1><p class="mt-2 max-w-2xl text-sm text-apple-gray">Provider-backed prices, recent market coverage, and research tools in one workspace.</p></div>
-                        <button onclick="focusChat()" class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-2xl bg-apple-blue px-4 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5 hover:bg-blue-600 sm:self-auto"><i data-lucide="sparkles" class="h-4 w-4"></i> Ask AI</button>
+                        <button type="button" onclick="focusChat()" class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-2xl bg-apple-blue px-4 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5 hover:bg-blue-600 sm:self-auto"><i data-lucide="sparkles" class="h-4 w-4"></i> Ask AI</button>
                     </section>
 
                     <section aria-labelledby="overview-heading">
@@ -244,8 +271,8 @@
                         </div>
 
                         <div class="mt-3 pt-2.5 border-t border-black/[0.04] dark:border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-[10px] text-apple-gray font-medium">
-                            <span class="inline-flex items-center gap-1.5"><i data-lucide="cpu" class="w-3 h-3 text-indigo-500"></i> Pure CPU (<15ms) · Conformal Empirical Bounds · Zero Leakage</span>
-                            <span class="italic">Select any stock card for full backtest audit & multi-model comparison</span>
+                            <span class="inline-flex items-center gap-1.5"><i data-lucide="cpu" class="w-3 h-3 text-indigo-500"></i> Pure CPU (&lt;15ms) · Conformal Empirical Bounds · Zero Leakage</span>
+                            <span class="italic">Select any stock card for full backtest audit &amp; multi-model comparison</span>
                         </div>
                     </section>
 
@@ -253,7 +280,7 @@
                         <div class="mb-3 flex flex-wrap items-center justify-between gap-3"><div><p class="text-xs font-semibold uppercase tracking-[.15em] text-apple-blue">The latest</p><h2 class="mt-1 text-xl font-semibold">Market headlines</h2><p class="mt-1 text-xs text-apple-gray">A short preview from configured publishers.</p></div><button type="button" onclick="showView('news')" class="min-h-10 rounded-xl px-3 text-sm font-semibold text-apple-blue hover:bg-black/5">Open news feed <i data-lucide="arrow-up-right" class="ml-1 inline h-4 w-4"></i></button></div>
                         <div id="landing-news-feed" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2" aria-live="polite"><p class="py-8 text-center text-sm text-apple-gray">Gathering recent headlines…</p></div>
                     </section>
-                    <section class="glass-panel flex flex-col gap-4 rounded-3xl p-5 sm:flex-row sm:items-center sm:justify-between md:px-6"><div class="flex items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-apple-blue/10 text-apple-blue"><i data-lucide="sparkles" class="h-5 w-5"></i></span><div><p class="text-xs font-semibold uppercase tracking-[.15em] text-apple-blue">Research assistant</p><h2 class="mt-0.5 text-base font-semibold">Questions about markets or your research?</h2></div></div><button onclick="focusChat()" class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-apple-blue px-4 text-sm font-semibold text-white">Open AI research <i data-lucide="arrow-up-right" class="h-4 w-4"></i></button></section>
+                    <section class="glass-panel flex flex-col gap-4 rounded-3xl p-5 sm:flex-row sm:items-center sm:justify-between md:px-6"><div class="flex items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-apple-blue/10 text-apple-blue"><i data-lucide="sparkles" class="h-5 w-5"></i></span><div><p class="text-xs font-semibold uppercase tracking-[.15em] text-apple-blue">Research assistant</p><h2 class="mt-0.5 text-base font-semibold">Questions about markets or your research?</h2></div></div><button type="button" onclick="focusChat()" class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-apple-blue px-4 text-sm font-semibold text-white">Open AI research <i data-lucide="arrow-up-right" class="h-4 w-4"></i></button></section>
                     <div id="market-comparison-section" class="hidden">
                         <div class="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h2 id="compare-heading" class="text-lg font-semibold">Market comparison</h2><p class="mt-1 text-xs text-apple-gray">Indexed to 100 at the start of the selected period. Feed freshness varies by provider.</p></div><div class="flex gap-2"><select aria-label="Comparison period" id="compare-period" class="rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm dark:bg-black/20" onchange="loadComparisons()"><option value="1mo">1 month</option><option value="3mo">3 months</option><option value="6mo">6 months</option><option value="1y">1 year</option></select><button type="button" class="min-h-11 rounded-xl px-3 text-sm font-semibold text-apple-blue hover:bg-black/5" onclick="loadComparisons(true)"><i data-lucide="refresh-cw" class="mr-1 inline h-4 w-4"></i>Refresh data</button></div></div>
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" id="comparison-grid">
@@ -270,29 +297,151 @@
                     </div>
                 </div>
 
-                <section id="news-page" class="hidden mx-auto grid max-w-7xl grid-cols-1 gap-7 animate-fade-in pb-24 xl:grid-cols-[minmax(0,860px)_minmax(250px,300px)]">
+                <section id="news-page" class="hidden mx-auto grid max-w-7xl grid-cols-1 gap-7 animate-fade-in pb-24 xl:grid-cols-[minmax(0,1fr)_330px]">
                     <div class="news-feed-column min-w-0">
-                    <header class="mb-5 border-b border-black/5 bg-[var(--page-bg)] px-0 py-4 dark:border-white/10">
-                        <div class="flex items-start justify-between gap-3"><div><p class="text-xs font-semibold uppercase tracking-[.16em] text-apple-blue">Publisher-sourced coverage</p><h1 class="mt-1 text-2xl font-semibold tracking-tight">News feed</h1><p class="mt-1 text-xs text-apple-gray">Fresh market and company headlines, attributed to the original publisher.</p></div><button type="button" onclick="refreshLandingNews()" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-black/10 transition hover:border-apple-blue hover:text-apple-blue dark:border-white/10" aria-label="Refresh news feed" title="Fetch latest headlines"><i data-lucide="refresh-cw" class="h-4 w-4"></i></button></div>
-                        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div class="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-black/5 p-1 dark:bg-white/5" role="group" aria-label="Filter news"><button class="feed-filter active min-h-9 shrink-0 rounded-lg px-3 text-xs font-semibold" data-market-filter="all" onclick="filterLandingNews('all')">For you</button><button class="feed-filter min-h-9 shrink-0 rounded-lg px-3 text-xs font-semibold" data-market-filter="watchlist" onclick="filterLandingNews('watchlist')">My stocks</button><button class="feed-filter min-h-9 shrink-0 rounded-lg px-3 text-xs font-semibold" data-market-filter="india" onclick="filterLandingNews('india')">India</button><button class="feed-filter min-h-9 shrink-0 rounded-lg px-3 text-xs font-semibold" data-market-filter="us" onclick="filterLandingNews('us')">US</button></div><div class="flex min-w-0 gap-2"><select id="news-feed-period" class="min-h-10 shrink-0 rounded-xl border border-black/10 bg-white/70 px-3 text-xs font-medium outline-none focus:border-apple-blue dark:border-white/10 dark:bg-white/[.04]" aria-label="News time period" onchange="refreshLandingNews()"><option value="1">24 hours</option><option value="7" selected>7 days</option><option value="30">30 days</option></select><label class="relative block min-w-0 flex-1 sm:max-w-64"><i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-apple-gray"></i><input id="news-feed-search" type="search" class="min-h-10 w-full rounded-xl border border-black/10 bg-white/70 pl-9 pr-3 text-sm outline-none transition focus:border-apple-blue dark:border-white/10 dark:bg-white/[.04]" placeholder="Search headlines or sources" aria-label="Search news headlines and sources" oninput="searchLandingNews(this.value)"></label></div></div>
-                        <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-                            <div class="flex items-center gap-2">
-                                <span id="news-feed-count" class="text-[11px] text-apple-gray" role="status"></span>
-                                <span id="news-background-sync" class="hidden inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                                    <i data-lucide="refresh-cw" class="w-2.5 h-2.5 animate-spin"></i> Syncing in background
-                                </span>
+                        <header class="mb-5 border-b border-black/5 bg-[var(--page-bg)] px-0 py-4 dark:border-white/10">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live Wire Active
+                                        </span>
+                                        <span id="news-background-sync" class="hidden inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                                            <i data-lucide="refresh-cw" class="w-2.5 h-2.5 animate-spin"></i> Syncing
+                                        </span>
+                                    </div>
+                                    <h1 class="mt-2 text-2xl sm:text-3xl font-bold tracking-tight">Market News &amp; Intelligence</h1>
+                                    <p class="mt-1 text-xs sm:text-sm text-apple-gray">Multi-exchange financial wire indexing with algorithmic sentiment and AI synthesis.</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <!-- View Mode Switch (Grid vs Wire) -->
+                                    <div class="inline-flex p-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10" role="group" aria-label="News view layout">
+                                        <button type="button" id="news-view-grid-btn" onclick="setNewsViewMode('grid')" class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all active bg-white dark:bg-white/15 text-apple-blue shadow-xs" title="Bento Grid View">
+                                            <i data-lucide="layout-grid" class="w-3.5 h-3.5 inline mr-1"></i> Grid
+                                        </button>
+                                        <button type="button" id="news-view-wire-btn" onclick="setNewsViewMode('wire')" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-apple-gray hover:text-text-main transition-all" title="Dense Wire View">
+                                            <i data-lucide="align-justify" class="w-3.5 h-3.5 inline mr-1"></i> Wire
+                                        </button>
+                                    </div>
+                                    <!-- Refresh Button -->
+                                    <button type="button" onclick="refreshLandingNews()" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-white/70 dark:bg-white/5 transition hover:border-apple-blue hover:text-apple-blue dark:border-white/10" aria-label="Refresh news feed" title="Fetch latest headlines">
+                                        <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <span id="news-feed-refresh-state" class="text-[10px] text-apple-gray" role="status"></span>
+
+                            <!-- Clean Responsive Control Bar -->
+                            <div class="mt-4 flex flex-col gap-2.5">
+                                <!-- Market Selection Chips -->
+                                <div class="flex items-center gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Filter news by market">
+                                    <button type="button" class="feed-filter active shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold" data-market-filter="all" onclick="filterLandingNews('all')">🌐 All Markets</button>
+                                    <button type="button" class="feed-filter shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold" data-market-filter="india" onclick="filterLandingNews('india')">🇮🇳 Dalal St</button>
+                                    <button type="button" class="feed-filter shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold" data-market-filter="us" onclick="filterLandingNews('us')">🇺🇸 Wall St</button>
+                                    <button type="button" class="feed-filter shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold" data-market-filter="watchlist" onclick="filterLandingNews('watchlist')">⭐ Watchlist</button>
+                                    <button type="button" class="feed-filter shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold" data-market-filter="saved" onclick="filterLandingNews('saved')">🔖 Bookmarks</button>
+                                </div>
+
+                                <!-- Filter Controls: Provider, Sort, Period & Search -->
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <!-- News Provider Select -->
+                                    <select id="news-feed-provider" class="min-h-8 shrink-0 rounded-lg border border-black/10 bg-white/70 px-2.5 text-xs font-medium outline-none focus:border-apple-blue dark:border-white/10 dark:bg-white/[.04]" aria-label="Filter by News Provider" onchange="filterNewsProvider(this.value)">
+                                        <option value="all">All Publishers</option>
+                                    </select>
+                                    <!-- Sort Select -->
+                                    <select id="news-feed-sort" class="min-h-8 shrink-0 rounded-lg border border-black/10 bg-white/70 px-2.5 text-xs font-medium outline-none focus:border-apple-blue dark:border-white/10 dark:bg-white/[.04]" aria-label="Sort news stories" onchange="sortNewsFeed(this.value)">
+                                        <option value="latest">⏱️ Latest</option>
+                                        <option value="bullish">📈 Bullish</option>
+                                        <option value="bearish">📉 Bearish</option>
+                                    </select>
+                                    <!-- Time Period -->
+                                    <select id="news-feed-period" class="min-h-8 shrink-0 rounded-lg border border-black/10 bg-white/70 px-2.5 text-xs font-medium outline-none focus:border-apple-blue dark:border-white/10 dark:bg-white/[.04]" aria-label="News time period" onchange="refreshLandingNews()">
+                                        <option value="1">24h</option>
+                                        <option value="7" selected>7 days</option>
+                                        <option value="30">30 days</option>
+                                    </select>
+                                    <!-- Search Input -->
+                                    <div class="relative min-w-0 flex-1 sm:min-w-[180px]">
+                                        <i data-lucide="search" class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-apple-gray"></i>
+                                        <input id="news-feed-search" type="search" class="min-h-8 w-full rounded-lg border border-black/10 bg-white/70 pl-8 pr-3 text-xs outline-none transition focus:border-apple-blue dark:border-white/10 dark:bg-white/[.04]" placeholder="Search headlines…" aria-label="Search news headlines and sources" oninput="searchLandingNews(this.value)">
+                                    </div>
+                                </div>
+
+                                <!-- Topic Filter Chips -->
+                                <div class="flex items-center gap-1.5 overflow-x-auto text-xs pt-0.5">
+                                    <span class="text-[10px] font-bold text-apple-gray mr-0.5 uppercase tracking-wider shrink-0">Topics:</span>
+                                    <button type="button" class="news-topic-pill active shrink-0 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition" data-topic="all" onclick="filterNewsTopic('all')">All</button>
+                                    <button type="button" class="news-topic-pill shrink-0 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition" data-topic="earnings" onclick="filterNewsTopic('earnings')">📊 Earnings</button>
+                                    <button type="button" class="news-topic-pill shrink-0 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition" data-topic="macro" onclick="filterNewsTopic('macro')">🏛️ Macro &amp; Rates</button>
+                                    <button type="button" class="news-topic-pill shrink-0 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition" data-topic="tech" onclick="filterNewsTopic('tech')">⚡ Tech &amp; AI</button>
+                                    <button type="button" class="news-topic-pill shrink-0 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition" data-topic="deals" onclick="filterNewsTopic('deals')">🤝 M&amp;A</button>
+                                </div>
+                            </div>
+
+                            <div class="mt-2.5 flex items-center justify-between gap-2 border-t border-black/[0.04] dark:border-white/[0.06] pt-2">
+                                <span id="news-feed-count" class="text-[11px] text-apple-gray" role="status"></span>
+                                <span id="news-feed-refresh-state" class="text-[10px] text-apple-gray" role="status"></span>
+                            </div>
+                        </header>
+
+                        <!-- Main Feed Container: Streamlined Minimal Cards or Wire rows -->
+                        <div id="news-feed" class="pt-1" aria-live="polite">
+                            <p class="py-10 text-center text-sm text-apple-gray">Recent headlines are loading…</p>
                         </div>
-                    </header>
-                    <div id="news-feed" class="space-y-6 pt-2" aria-live="polite"><p class="py-10 text-center text-sm text-apple-gray">Recent headlines are loading…</p></div>
-                    <button id="news-load-more" type="button" onclick="loadMoreLandingNews()" class="mx-auto mt-4 hidden min-h-11 rounded-xl border border-black/10 px-5 text-sm font-semibold transition hover:border-apple-blue hover:text-apple-blue dark:border-white/10">Load more stories</button>
-                    <p id="news-feed-source" class="mt-4 text-center text-[10px] leading-relaxed text-apple-gray">Publisher headlines and excerpts are shown with their source links. Full article access follows each publisher’s terms.</p>
+
+                        <div class="mt-6 flex justify-center">
+                            <button id="news-load-more" type="button" onclick="loadMoreLandingNews()" class="hidden min-h-10 rounded-xl border border-black/10 bg-white/70 px-5 text-xs font-bold transition hover:border-apple-blue hover:text-apple-blue dark:border-white/10 dark:bg-white/5 shadow-xs">
+                                Load more stories
+                            </button>
+                        </div>
+                        <p id="news-feed-source" class="mt-3 text-center text-[10px] leading-relaxed text-apple-gray">Verified financial wire feeds with direct publisher source links.</p>
                     </div>
-                    <aside class="news-context-rail" aria-label="News context and research shortcuts">
-                        <section class="news-rail-section"><div><p class="text-[10px] font-semibold uppercase tracking-[.14em] text-apple-blue">Your research</p><h2 class="mt-1 text-base font-semibold">Watchlist</h2></div><div id="news-context-watchlist" class="mt-3 divide-y divide-black/[.06] dark:divide-white/10"></div></section>
-                        <section class="news-rail-section mt-4"><p class="text-[10px] font-semibold uppercase tracking-[.14em] text-apple-blue">Quick actions</p><h2 class="mt-1 text-base font-semibold">Research with AI</h2><p class="mt-2 text-xs leading-relaxed text-apple-gray">Ask about recent coverage or compare a company using available market evidence.</p><button type="button" class="mt-3 w-full rounded-xl bg-apple-blue px-3 py-2.5 text-left text-xs font-semibold text-white" onclick="startSuggestedChat('Summarize the latest available market news and cite each source.')"><i data-lucide="sparkles" class="mr-2 inline h-4 w-4"></i>Summarize market news</button><button type="button" class="mt-2 w-full rounded-xl border border-black/10 px-3 py-2.5 text-left text-xs font-semibold hover:border-apple-blue dark:border-white/10" onclick="startSuggestedChat('What are the most important limitations in the available market news coverage?')">Review coverage limits</button></section>
-                        <p class="mt-4 text-[10px] leading-relaxed text-apple-gray">Headlines link to their publisher. Article summaries and images are shown only when a provider supplies them.</p>
+
+                    <!-- Right Intelligence Rail: Consolidated into a single clean minimal panel -->
+                    <aside class="news-context-rail space-y-3" aria-label="News intelligence summary">
+                        <div class="glass-panel rounded-2xl p-4 space-y-4">
+                            <!-- Sentiment Header & Bar -->
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <p class="text-[10px] font-bold uppercase tracking-[.14em] text-apple-blue flex items-center gap-1.5">
+                                        <i data-lucide="activity" class="w-3.5 h-3.5"></i> News Sentiment
+                                    </p>
+                                    <span id="news-sentiment-status" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">BULLISH</span>
+                                </div>
+                                <div class="flex justify-between text-[11px] font-semibold mb-1 text-apple-gray">
+                                    <span id="news-sentiment-positive">68% Positive</span>
+                                    <span id="news-sentiment-negative">32% Negative</span>
+                                </div>
+                                <div class="w-full h-1.5 rounded-full overflow-hidden bg-black/10 dark:bg-white/10 flex">
+                                    <div id="news-sentiment-bar-pos" class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-500" style="width: 68%;"></div>
+                                    <div id="news-sentiment-bar-neg" class="bg-gradient-to-r from-rose-500 to-amber-500 h-full transition-all duration-500" style="width: 32%;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Trending Tickers -->
+                            <div class="pt-3 border-t border-black/[0.05] dark:border-white/[0.06]">
+                                <p class="text-[10px] font-bold uppercase tracking-[.14em] text-apple-blue flex items-center gap-1.5 mb-2">
+                                    <i data-lucide="trending-up" class="w-3.5 h-3.5"></i> Trending in Wire
+                                </p>
+                                <div id="news-trending-tickers" class="flex flex-wrap gap-1.5">
+                                    <span class="text-xs text-apple-gray">Analyzing mentions…</span>
+                                </div>
+                            </div>
+
+                            <!-- Single AI Synthesis Quick Action -->
+                            <div class="pt-3 border-t border-black/[0.05] dark:border-white/[0.06]">
+                                <button type="button" class="w-full rounded-xl bg-apple-blue/10 hover:bg-apple-blue hover:text-white text-apple-blue px-3 py-2 text-xs font-semibold transition flex items-center justify-between" onclick="startSuggestedChat('Summarize the latest market news and highlight key volatility drivers.')">
+                                    <span class="flex items-center gap-1.5">
+                                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Synthesize Market Drivers
+                                    </span>
+                                    <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Attribution Note -->
+                        <div class="px-2 text-[10px] text-apple-gray leading-tight">
+                            Livemint · Seeking Alpha · Business Standard · Investing.com. Attribution &amp; links preserved.
+                        </div>
                     </aside>
                 </section>
 
@@ -324,7 +473,7 @@
                                 </span>
                             </div>
                             <h2 class="text-2xl font-medium text-apple-gray" id="stock-name">Loading...</h2>
-                            <button id="quote-retry" class="hidden mt-2 min-h-11 rounded-xl px-3 text-sm font-semibold text-apple-blue hover:bg-black/5" onclick="handleSearch(true,true)"><i data-lucide="refresh-cw" class="mr-1 inline h-4 w-4"></i>Refresh provider data</button>
+                            <button type="button" id="quote-retry" class="hidden mt-2 min-h-11 rounded-xl px-3 text-sm font-semibold text-apple-blue hover:bg-black/5" onclick="handleSearch(true,true)"><i data-lucide="refresh-cw" class="mr-1 inline h-4 w-4"></i>Refresh provider data</button>
                         </div>
                         <div class="text-left md:text-right">
                             <div class="text-5xl md:text-6xl font-bold tracking-tight" id="stock-price">$0.00</div>
@@ -371,18 +520,18 @@
 
                                 <!-- Chart Periods -->
                                 <div class="flex min-w-0 gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-xl overflow-x-auto" id="chart-periods">
-                                    <button class="chart-period-btn active" onclick="loadChartData('1mo')">1M</button>
-                                    <button class="chart-period-btn" onclick="loadChartData('3mo')">3M</button>
-                                    <button class="chart-period-btn" onclick="loadChartData('6mo')">6M</button>
-                                    <button class="chart-period-btn" onclick="loadChartData('1y')">1Y</button>
+                                    <button type="button" class="chart-period-btn active" onclick="loadChartData('1mo')">1M</button>
+                                    <button type="button" class="chart-period-btn" onclick="loadChartData('3mo')">3M</button>
+                                    <button type="button" class="chart-period-btn" onclick="loadChartData('6mo')">6M</button>
+                                    <button type="button" class="chart-period-btn" onclick="loadChartData('1y')">1Y</button>
                                 </div>
                             </div>
                         </div>
                         <div class="mb-3 flex flex-wrap justify-between gap-2 items-center" role="group" aria-label="Chart style">
                             <div class="flex items-center gap-2">
                                 <span class="text-xs text-apple-gray font-medium hidden sm:inline">Display:</span>
-                                <button class="chart-style-btn active" onclick="setChartStyle('line')" aria-pressed="true">Line</button>
-                                <button class="chart-style-btn" onclick="setChartStyle('candlestick')" aria-pressed="false">Candles</button>
+                                <button type="button" class="chart-style-btn active" onclick="setChartStyle('line')" aria-pressed="true">Line</button>
+                                <button type="button" class="chart-style-btn" onclick="setChartStyle('candlestick')" aria-pressed="false">Candles</button>
                             </div>
                             <label class="text-xs text-apple-gray flex items-center gap-1.5 cursor-pointer">
                                 <input type="checkbox" id="chart-auto-adjust" class="rounded border-black/20 text-apple-blue focus:ring-apple-blue" checked onchange="toggleAutoAdjust()">
@@ -417,11 +566,11 @@
 
                     <!-- Tabs -->
                     <div class="flex gap-8 border-b border-black/10 dark:border-white/10 mt-8 mb-6 animate-slide-up" style="animation-delay: 0.2s;">
-                        <button class="tab-btn active pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('overview')">Overview</button>
-                        <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('technical')">Technical</button>
-                        <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide flex items-center gap-1.5" onclick="switchTab('forecast')"><i data-lucide="trending-up" class="w-3.5 h-3.5 text-indigo-500"></i> Forecast <span class="bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-indigo-500/20">ML</span></button>
-                        <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('fundamentals')">Fundamentals</button>
-                        <button class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide flex items-center gap-2" onclick="switchTab('news')">News <span class="bg-apple-blue text-white text-[10px] px-1.5 rounded-full" id="news-badge">0</span></button>
+                        <button type="button" class="tab-btn active pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('overview')">Overview</button>
+                        <button type="button" class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('technical')">Technical</button>
+                        <button type="button" class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide flex items-center gap-1.5" onclick="switchTab('forecast')"><i data-lucide="trending-up" class="w-3.5 h-3.5 text-indigo-500"></i> Forecast <span class="bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-indigo-500/20">ML</span></button>
+                        <button type="button" class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide" onclick="switchTab('fundamentals')">Fundamentals</button>
+                        <button type="button" class="tab-btn pb-3 px-1 text-sm font-semibold tracking-wide flex items-center gap-2" onclick="switchTab('news')">News <span class="bg-apple-blue text-white text-[10px] px-1.5 rounded-full" id="news-badge">0</span></button>
                     </div>
 
                     <!-- Tab Contents -->
@@ -452,7 +601,7 @@
                                     </span>
                                     <div class="flex gap-1 bg-black/5 dark:bg-white/5 p-0.5 rounded-xl text-xs font-semibold">
                                         <button type="button" id="forecast-mode-beginner-btn" onclick="toggleForecastViewMode('simple')" class="forecast-view-pill active px-3 py-1 rounded-lg">
-                                            🌟 Beginner (Simple & Clear)
+                                            🌟 Beginner (Simple &amp; Clear)
                                         </button>
                                         <button type="button" id="forecast-mode-pro-btn" onclick="toggleForecastViewMode('pro')" class="forecast-view-pill px-3 py-1 rounded-lg">
                                             🔬 Quantitative Pro
@@ -476,7 +625,7 @@
                                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                                         <span id="forecast-engine-status-text">QUANT ENGINE READY</span>
                                     </span>
-                                    <span id="forecast-hardware-summary" class="text-[11px] font-medium text-gray-700 dark:text-gray-300">Detecting Hardware & CPU Path...</span>
+                                    <span id="forecast-hardware-summary" class="text-[11px] font-medium text-gray-700 dark:text-gray-300">Detecting Hardware &amp; CPU Path...</span>
                                     <span id="forecast-freshness-pill" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20" title="Source: yfinance free tier · Verified monotonic timestamps">
                                         <i data-lucide="check-circle" class="w-3 h-3"></i> <span id="forecast-freshness-text">DATA FRESH</span>
                                     </span>
@@ -487,7 +636,7 @@
                                 </div>
                                 <div class="flex items-center gap-2 text-[11px]">
                                     <button type="button" onclick="openSystemHealthModal()" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-500/20 hover:bg-indigo-500/15 active:scale-95 transition" title="Inspect CPU/RAM profile, service health, and trigger diagnostic repair">
-                                        <i data-lucide="activity" class="w-3.5 h-3.5"></i> System Health & Repair
+                                        <i data-lucide="activity" class="w-3.5 h-3.5"></i> System Health &amp; Repair
                                     </button>
                                 </div>
                             </div>
@@ -560,11 +709,11 @@
                                     </div>
                                     <div class="flex items-center gap-1.5">
                                         <span class="text-[10px] uppercase tracking-wider font-bold text-apple-gray">Compute:</span>
-                                        <span id="model-spec-capacity-badge" class="font-mono text-[11px] text-gray-700 dark:text-gray-300">Level 1/4 &middot; &lt; 2 MB RAM</span>
+                                        <span id="model-spec-capacity-badge" class="font-mono text-[11px] text-gray-700 dark:text-gray-300">Level 1/4 &amp;middot; &lt; 2 MB RAM</span>
                                     </div>
                                     <div class="flex items-center gap-1.5">
                                         <span class="text-[10px] uppercase tracking-wider font-bold text-apple-gray">Execution Profile:</span>
-                                        <span id="model-spec-device-verdict" class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">&check; Hardware Compatible · CPU Native</span>
+                                        <span id="model-spec-device-verdict" class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">&amp;check; Hardware Compatible · CPU Native</span>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2.5">
@@ -617,7 +766,7 @@
                                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                                     <div>
                                         <div class="flex items-center gap-2">
-                                            <h3 class="text-base font-bold tracking-tight">Probabilistic Trajectory & Conformal Uncertainty Band</h3>
+                                            <h3 class="text-base font-bold tracking-tight">Probabilistic Trajectory &amp; Conformal Uncertainty Band</h3>
                                             <span id="forecast-chart-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase">Model Active</span>
                                         </div>
                                         <p id="forecast-chart-caption" class="text-xs text-apple-gray mt-0.5">Historical price series leading to cutoff origin date, transitioning into projected trajectory with calibrated confidence interval cone.</p>
@@ -636,7 +785,7 @@
                                             <div class="w-2.5 h-2.5 rounded-full bg-indigo-500 loading-dot" style="animation-delay: 0.2s"></div>
                                             <div class="w-2.5 h-2.5 rounded-full bg-indigo-500 loading-dot" style="animation-delay: 0.4s"></div>
                                         </div>
-                                        <span class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Computing walk-forward forecast & uncertainty cone...</span>
+                                        <span class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Computing walk-forward forecast &amp; uncertainty cone...</span>
                                     </div>
                                 </div>
 
@@ -687,7 +836,7 @@
                                 <div class="flex flex-wrap items-center justify-between gap-2 mb-3.5">
                                     <div>
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
-                                            <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-500"></i> Multi-Model Forecast Target & Expected Return Comparison
+                                            <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-500"></i> Multi-Model Forecast Target &amp; Expected Return Comparison
                                         </h4>
                                         <p class="text-xs text-apple-gray mt-0.5">Direct side-by-side comparison across all 8 statistical, ensemble, neural, and baseline models for the current horizon.</p>
                                     </div>
@@ -741,7 +890,7 @@
                                         </span>
                                         <div>
                                             <h4 class="text-sm font-bold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                                Deep Quantitative Analytics & Technical Audit Trail
+                                                Deep Quantitative Analytics &amp; Technical Audit Trail
                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">Optional · Advanced</span>
                                             </h4>
                                             <p class="text-xs text-apple-gray mt-0.5">Explore model disagreement, factor weights, mini technical charts, and realized prediction logs.</p>
@@ -761,7 +910,7 @@
                                         </span>
                                         <div>
                                             <h3 id="disagreement-heading" class="text-sm sm:text-base font-bold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                                Ensemble Disagreement & Model Reliability
+                                                Ensemble Disagreement &amp; Model Reliability
                                                 <span id="disagreement-regime-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
                                                     Evaluating Ensemble...
                                                 </span>
@@ -827,13 +976,13 @@
                                                 <i data-lucide="brain" class="w-4 h-4"></i>
                                             </span>
                                             <h3 id="rationale-engine-heading" class="text-base font-bold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                                Market Understanding & Prediction Rationale
+                                                Market Understanding &amp; Prediction Rationale
                                                 <span id="forecast-regime-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                                                     Bullish Momentum
                                                 </span>
                                             </h3>
                                         </div>
-                                        <p class="text-xs text-apple-gray mt-1">Why the quantitative models reached this forecast — multi-factor feature attribution & structural signals.</p>
+                                        <p class="text-xs text-apple-gray mt-1">Why the quantitative models reached this forecast — multi-factor feature attribution &amp; structural signals.</p>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2" id="forecast-reliability-badges">
                                         <span id="forecast-nominal-interval-badge" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20" title="Selected nominal prediction interval band">
@@ -874,7 +1023,7 @@
                                     <div class="glass-panel p-3.5 rounded-2xl border border-black/[0.05] dark:border-white/[0.06] flex flex-col justify-between hover:border-indigo-500/30 transition-all group">
                                         <div class="flex items-center justify-between mb-2">
                                             <span class="text-[11px] font-bold text-apple-gray uppercase tracking-wider flex items-center gap-1.5">
-                                                <i data-lucide="activity" class="w-3.5 h-3.5 text-blue-500"></i> Volatility & Risk
+                                                <i data-lucide="activity" class="w-3.5 h-3.5 text-blue-500"></i> Volatility &amp; Risk
                                             </span>
                                             <span id="mini-volatility-status" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400">Stable</span>
                                         </div>
@@ -939,7 +1088,7 @@
                                                 <i data-lucide="lightbulb" class="w-3.5 h-3.5"></i>
                                             </span>
                                             <h4 class="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                                Quantitative Model Suggestion & Actionable Tip
+                                                Quantitative Model Suggestion &amp; Actionable Tip
                                                 <span id="stock-suggestion-action" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white uppercase tracking-wider">
                                                     Accumulate on Dips
                                                 </span>
@@ -982,7 +1131,7 @@
                                 <div class="flex items-center justify-between mb-3.5">
                                     <div>
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
-                                            <i data-lucide="globe" class="w-3.5 h-3.5 text-apple-blue"></i> Free 3rd-Party Consensus & Quantitative Baselines
+                                            <i data-lucide="globe" class="w-3.5 h-3.5 text-apple-blue"></i> Free 3rd-Party Consensus &amp; Quantitative Baselines
                                         </h4>
                                         <p class="text-xs text-apple-gray mt-0.5">Cross-referenced against verified public external sources with explicit provenance and reliability labeling.</p>
                                     </div>
@@ -1131,7 +1280,7 @@
                                     <!-- News Evidence Citation Grid -->
                             <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
                                 <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray mb-2.5 flex items-center gap-1.5">
-                                    <i data-lucide="newspaper" class="w-3.5 h-3.5 text-apple-blue"></i> News Evidence Grounding & Sentiment Inputs
+                                    <i data-lucide="newspaper" class="w-3.5 h-3.5 text-apple-blue"></i> News Evidence Grounding &amp; Sentiment Inputs
                                 </h4>
                                 <div id="forecast-news-evidence" class="space-y-2 text-xs">
                                     <!-- Populated dynamically -->
@@ -1195,7 +1344,7 @@
 
                     <!-- Right: Model / System Status Indicator & Diagnostics Trigger -->
                     <div class="flex items-center gap-2 shrink-0">
-                        <button type="button" id="chat-system-status" onclick="toggleSystemStatus()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs font-medium text-gray-700 dark:text-gray-300 transition-colors border border-black/5 dark:border-white/5" title="View AI engine & system health">
+                        <button type="button" id="chat-system-status" onclick="toggleSystemStatus()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs font-medium text-gray-700 dark:text-gray-300 transition-colors border border-black/5 dark:border-white/5" title="View AI engine &amp; system health">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 status-dot"></span>
                             <span id="chat-system-status-label" class="text-[11px] font-semibold">Ollama Ready</span>
                         </button>
@@ -1263,7 +1412,7 @@
                                           onkeydown="if(event.key === 'Enter' &amp;&amp; !event.shiftKey) { event.preventDefault(); sendChatMessage(); }"></textarea>
                                 
                                 <!-- Send or Stop Button -->
-                                <button id="chat-send-btn" onclick="handleSendOrStop()" aria-label="Send message" class="p-2 rounded-full bg-apple-blue text-white hover:bg-blue-600 transition-all disabled:opacity-50 mb-1 flex items-center justify-center shrink-0 w-9 h-9 shadow-md shadow-blue-500/20 active:scale-95" title="Send message">
+                                <button type="button" id="chat-send-btn" onclick="handleSendOrStop()" aria-label="Send message" class="p-2 rounded-full bg-apple-blue text-white hover:bg-blue-600 transition-all disabled:opacity-50 mb-1 flex items-center justify-center shrink-0 w-9 h-9 shadow-md shadow-blue-500/20 active:scale-95" title="Send message">
                                     <i data-lucide="arrow-up" class="h-4 w-4" id="chat-send-icon"></i>
                                 </button>
                             </div>
@@ -1277,7 +1426,7 @@
                                             <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-500"></i>
                                             <span>General</span>
                                         </button>
-                                        <button type="button" id="chat-mode-market-btn" class="chat-mode-btn px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-xs" onclick="setChatMode('auto')" title="Market RAG: Live stock data, financial analysis, technical indicators & citations">
+                                        <button type="button" id="chat-mode-market-btn" class="chat-mode-btn px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-xs" onclick="setChatMode('auto')" title="Market RAG: Live stock data, financial analysis, technical indicators &amp; citations">
                                             <i data-lucide="trending-up" class="w-3.5 h-3.5 text-apple-blue"></i>
                                             <span>Market RAG</span>
                                         </button>
@@ -1299,7 +1448,7 @@
                                     </button>
 
                                     <!-- Temperature & Presets Pill -->
-                                    <button type="button" id="composer-temp-pill" onclick="toggleParametersPopover()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/5 font-semibold transition-colors border border-black/5 dark:border-white/10 shrink-0" title="Temperature & Generation Presets">
+                                    <button type="button" id="composer-temp-pill" onclick="toggleParametersPopover()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/5 font-semibold transition-colors border border-black/5 dark:border-white/10 shrink-0" title="Temperature &amp; Generation Presets">
                                         <i data-lucide="thermometer" class="w-3.5 h-3.5 text-apple-blue"></i>
                                         <span id="composer-temp-val">0.70</span>
                                         <span id="composer-temp-label" class="text-[11px] text-apple-gray font-normal hidden sm:inline">(Balanced)</span>
@@ -1598,11 +1747,11 @@
 
     <!-- Modals -->
     <!-- Settings Modal -->
-    <div id="settings-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-[110] opacity-0 pointer-events-none transition-opacity duration-300" onclick="if(event.target === this) toggleModal('settings-modal')">
+    <div id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title" class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-[110] opacity-0 pointer-events-none transition-opacity duration-300" onclick="if(event.target === this) toggleModal('settings-modal')">
         <div class="glass-panel rounded-3xl w-full max-w-md mx-4 overflow-hidden transform scale-95 transition-all duration-300 shadow-2xl border border-white/20 flex flex-col max-h-[85vh]" id="settings-content" onclick="event.stopPropagation()">
             <div class="px-6 py-5 border-b border-black/10 dark:border-white/10 flex justify-between items-center bg-white/40 dark:bg-black/40 shrink-0">
                 <h3 class="text-lg font-bold tracking-tight">System Settings</h3>
-                <button onclick="toggleModal('settings-modal')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/10 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <button type="button" onclick="toggleModal('settings-modal')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/10 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <div class="p-6 space-y-5 overflow-y-auto flex-1 custom-scrollbar" id="settings-fields">
                 <div>
@@ -1665,17 +1814,17 @@
                 <div id="advanced-settings-controls" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
             </div>
             <div class="px-6 py-4 border-t border-black/10 dark:border-white/10 flex justify-end bg-white/40 dark:bg-black/40 shrink-0">
-                <button onclick="saveSettings()" class="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-apple-blue hover:bg-blue-600 shadow-md transition-all active:scale-95">Save Changes</button>
+                <button type="button" onclick="saveSettings()" class="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-apple-blue hover:bg-blue-600 shadow-md transition-all active:scale-95">Save Changes</button>
             </div>
         </div>
     </div>
 
     <!-- Docs Modal (RAG Hub) -->
-    <div id="docs-modal" class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-[110] opacity-0 pointer-events-none transition-opacity duration-300" onclick="if(event.target === this) toggleModal('docs-modal')">
+    <div id="docs-modal" role="dialog" aria-modal="true" aria-labelledby="docs-modal-title" class="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-[110] opacity-0 pointer-events-none transition-opacity duration-300" onclick="if(event.target === this) toggleModal('docs-modal')">
         <div class="glass-panel rounded-3xl w-full max-w-lg mx-4 overflow-hidden transform scale-95 transition-all duration-300 shadow-2xl border border-white/20 flex flex-col max-h-[85vh]" id="docs-content" onclick="event.stopPropagation()">
             <div class="px-6 py-5 border-b border-black/10 dark:border-white/10 flex justify-between items-center bg-gradient-to-r from-blue-500/10 to-purple-500/10 shrink-0">
-                <h3 class="text-lg font-bold tracking-tight flex items-center gap-2"><i data-lucide="database" class="w-5 h-5 text-apple-blue"></i> Data Hub</h3>
-                <button onclick="toggleModal('docs-modal')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/10 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <h3 id="docs-modal-title" class="text-lg font-bold tracking-tight flex items-center gap-2"><i data-lucide="database" class="w-5 h-5 text-apple-blue"></i> Data Hub</h3>
+                <button type="button" onclick="toggleModal('docs-modal')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/10 transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <div class="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
                 <div>
@@ -1686,15 +1835,15 @@
                             <p class="text-sm font-medium"><span class="font-bold text-text-main">Click to upload</span> or drag and drop</p>
                             <p class="text-xs mt-1">Research documents are indexed; CSV and Excel files are analyzed as datasets.</p>
                         </div>
-                        <input id="file-upload" type="file" class="hidden" accept=".pdf,.docx,.txt,.html,.htm,.csv,.xlsx,.xls" onchange="uploadFile()" />
+                        <input id="file-upload" type="file" class="hidden" accept=".pdf,.docx,.txt,.html,.htm,.csv,.xlsx,.xls" onchange="uploadFile()">
                     </label>
                 </div>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Optional document metadata">
                     <label class="text-xs font-semibold text-apple-gray">Company
-                        <input id="document-company" maxlength="120" class="mt-1 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm text-text-main dark:bg-white/5" placeholder="e.g. Apple Inc.">
+                        <input type="text" id="document-company" maxlength="120" class="mt-1 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm text-text-main dark:bg-white/5" placeholder="e.g. Apple Inc.">
                     </label>
                     <label class="text-xs font-semibold text-apple-gray">Ticker
-                        <input id="document-ticker" maxlength="20" class="mt-1 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm text-text-main uppercase dark:bg-white/5" placeholder="e.g. AAPL">
+                        <input type="text" id="document-ticker" maxlength="20" class="mt-1 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm text-text-main uppercase dark:bg-white/5" placeholder="e.g. AAPL">
                     </label>
                     <label class="text-xs font-semibold text-apple-gray">Document type
                         <select id="document-kind" class="mt-1 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm text-text-main dark:bg-white/5">
@@ -1703,7 +1852,7 @@
                     </label>
                 </div>
                 <section class="rounded-2xl bg-black/[.03] p-4 dark:bg-white/[.04]">
-                    <div class="mb-3 flex items-center justify-between"><h4 class="text-sm font-bold">Indexed documents</h4><button onclick="loadDocuments()" class="text-xs font-semibold text-apple-blue">Refresh</button></div>
+                    <div class="mb-3 flex items-center justify-between"><h4 class="text-sm font-bold">Indexed documents</h4><button type="button" onclick="loadDocuments()" class="text-xs font-semibold text-apple-blue">Refresh</button></div>
                     <div id="document-list" class="space-y-2 text-sm"><p class="text-apple-gray">Loading documents…</p></div>
                     <p class="mt-3 text-xs text-apple-gray">Select research documents to limit retrieval or one dataset to include its analysis in chat.</p>
                 </section>
@@ -1720,7 +1869,7 @@
                     <p class="mb-3 text-xs text-apple-gray">Crawl a permitted public page. Add a ticker to scope it to a company; SEC 10-K/10-Q pages are classified from their filing text.</p>
                     <div class="flex gap-2">
                         <input type="url" id="crawl-url" aria-label="Public page URL to crawl" class="min-w-0 flex-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none input-glow" placeholder="https://www.sec.gov/…">
-                        <button onclick="crawlUrl()" class="px-5 py-3 rounded-xl text-sm font-bold text-white bg-black dark:bg-white dark:text-black hover:opacity-80 shadow-md transition-all active:scale-95">Crawl</button>
+                        <button type="button" onclick="crawlUrl()" class="px-5 py-3 rounded-xl text-sm font-bold text-white bg-black dark:bg-white dark:text-black hover:opacity-80 shadow-md transition-all active:scale-95">Crawl</button>
                     </div>
                     <label class="mt-3 block text-xs font-semibold" for="crawl-ticker">Ticker for metadata filtering <span class="font-normal text-apple-gray">(optional)</span></label>
                     <input type="text" id="crawl-ticker" maxlength="20" autocomplete="off" class="mt-1 w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none input-glow" placeholder="AAPL">
@@ -1743,7 +1892,7 @@
                             <h3 id="model-info-modal-title" class="text-base font-bold tracking-tight">StockAI Model Specification</h3>
                             <span id="model-info-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase">Baseline</span>
                         </div>
-                        <p id="model-info-category" class="text-xs text-apple-gray mt-0.5">Statistical & Quantitative Specification</p>
+                        <p id="model-info-category" class="text-xs text-apple-gray mt-0.5">Statistical &amp; Quantitative Specification</p>
                     </div>
                 </div>
                 <button type="button" onclick="closeModelInfoModal()" class="p-1.5 rounded-xl text-apple-gray hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition" aria-label="Close modal">
@@ -1755,15 +1904,15 @@
             <div id="model-info-availability-banner" class="p-3.5 rounded-2xl border text-xs leading-relaxed flex items-center justify-between gap-3 bg-emerald-500/10 border-emerald-500/20 text-emerald-900 dark:text-emerald-200">
                 <div class="flex items-center gap-2">
                     <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0"></i>
-                    <span id="model-info-avail-text" class="font-semibold">Model Status: Ready (Calibrated & Verified)</span>
+                    <span id="model-info-avail-text" class="font-semibold">Model Status: Ready (Calibrated &amp; Verified)</span>
                 </div>
-                <span id="model-info-hw-profile" class="text-[11px] text-apple-gray font-mono">Pure CPU · <1ms Latency</span>
+                <span id="model-info-hw-profile" class="text-[11px] text-apple-gray font-mono">Pure CPU · &lt;1ms Latency</span>
             </div>
 
             <!-- Methodology & Formula Card -->
             <div class="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.06] space-y-2">
                 <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
-                    <i data-lucide="function-square" class="w-3.5 h-3.5 text-indigo-500"></i> Mathematical Formulation & Methodology
+                    <i data-lucide="function-square" class="w-3.5 h-3.5 text-indigo-500"></i> Mathematical Formulation &amp; Methodology
                 </h4>
                 <div id="model-info-formula" class="font-mono text-xs bg-black/5 dark:bg-black/40 p-2.5 rounded-xl text-indigo-600 dark:text-indigo-300 overflow-x-auto">
                     Formula loading...
@@ -1799,7 +1948,7 @@
                 </div>
                 <div class="p-3.5 rounded-2xl bg-amber-500/[0.03] border border-amber-500/15">
                     <h5 class="font-bold text-amber-700 dark:text-amber-300 mb-1 flex items-center gap-1.5">
-                        <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Known Limitations & Caveats
+                        <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Known Limitations &amp; Caveats
                     </h5>
                     <p id="model-info-limitations" class="text-gray-700 dark:text-gray-300 leading-relaxed"></p>
                 </div>
@@ -1823,7 +1972,7 @@
                     </div>
                     <div>
                         <div class="flex items-center gap-2">
-                            <h3 id="system-health-title" class="text-base font-bold tracking-tight">System Health & Diagnostic Hub</h3>
+                            <h3 id="system-health-title" class="text-base font-bold tracking-tight">System Health &amp; Diagnostic Hub</h3>
                             <span id="system-health-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase">All Systems Verified</span>
                         </div>
                         <p class="text-xs text-apple-gray mt-0.5">Real-time hardware profiler, provider connectivity, and model availability registry</p>
@@ -1867,7 +2016,7 @@
             <!-- Connected Services Status -->
             <div class="space-y-2 text-xs">
                 <h4 class="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-                    <i data-lucide="radio" class="w-3.5 h-3.5 text-apple-blue"></i> External Service & Feed Connectivity
+                    <i data-lucide="radio" class="w-3.5 h-3.5 text-apple-blue"></i> External Service &amp; Feed Connectivity
                 </h4>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]" id="health-providers-list">
                     <div class="p-2.5 rounded-xl bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
@@ -1892,7 +2041,7 @@
             <!-- Model Registry Readiness Table -->
             <div class="space-y-2 text-xs">
                 <h4 class="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-                    <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-500"></i> Model Registry Readiness & Availability
+                    <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-500"></i> Model Registry Readiness &amp; Availability
                 </h4>
                 <div class="overflow-x-auto rounded-2xl border border-black/[0.05] dark:border-white/[0.06]">
                     <table class="w-full text-left text-xs">
@@ -1919,7 +2068,7 @@
 
             <div class="pt-2 flex items-center justify-between">
                 <button type="button" onclick="triggerSystemRevalidate()" id="system-revalidate-btn" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 active:scale-95 transition flex items-center gap-1.5">
-                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Revalidate & Clear Stale Cache
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Revalidate &amp; Clear Stale Cache
                 </button>
                 <button type="button" onclick="closeSystemHealthModal()" class="px-5 py-2 rounded-xl text-xs font-semibold bg-black dark:bg-white text-white dark:text-black hover:opacity-90 transition">
                     Close
@@ -2028,7 +2177,7 @@
                     <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
                 </div>
                 <div class="text-sm font-bold text-gray-900 dark:text-gray-100" id="forecast-upload-dropzone-label">
-                    Choose a CSV or Excel file or drag & drop here
+                    Choose a CSV or Excel file or drag &amp; drop here
                 </div>
                 <p class="text-xs text-apple-gray mt-1" id="forecast-upload-dropzone-sub">
                     Supports .csv, .xlsx, .xls (Min 110 daily bars required for backtesting)
@@ -2159,7 +2308,7 @@
                     <button type="button" onclick="selectSpotlightTicker('TSLA')" class="px-2.5 py-1 rounded-xl text-xs font-semibold bg-black/[0.03] dark:bg-white/[0.05] hover:bg-apple-blue hover:text-white transition border border-black/[0.05] dark:border-white/[0.06]">TSLA <span class="text-[10px] opacity-75 font-normal">Tesla</span></button>
                     <button type="button" onclick="selectSpotlightTicker('RELIANCE.NS')" class="px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition border border-purple-500/20">RELIANCE.NS <span class="text-[10px] opacity-75 font-normal">NSE</span></button>
                     <button type="button" onclick="selectSpotlightTicker('TCS.NS')" class="px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition border border-purple-500/20">TCS.NS <span class="text-[10px] opacity-75 font-normal">NSE</span></button>
-                    <button type="button" onclick="selectSpotlightTicker('HDFCBANK.NS')" class="px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition border border-purple-500/20">HDFCBANK.NS</button>
+                    <button type="button" onclick="selectSpotlightTicker('HDFCBANK.NS')" class="px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition border border-purple-500/20">HDFCBANK.NS <span class="text-[10px] opacity-75 font-normal">NSE</span></button>
                 </div>
             </div>
 
@@ -2171,12 +2320,12 @@
     </div>
 
     <!-- Global Toast Notification -->
-    <div id="terminal-toast" class="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gray-900/95 dark:bg-white/95 text-white dark:text-gray-900 text-xs font-semibold shadow-2xl backdrop-blur-md border border-white/10 dark:border-black/10">
+    <div id="terminal-toast" role="status" aria-live="polite" class="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gray-900/95 dark:bg-white/95 text-white dark:text-gray-900 text-xs font-semibold shadow-2xl backdrop-blur-md border border-white/10 dark:border-black/10">
         <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 dark:text-emerald-600"></i>
         <span id="terminal-toast-msg">Action completed</span>
     </div>
 
     <!-- Scripts -->
-    <script defer src="/static/app.js?v=20261015-2"></script>
+    <script defer src="/static/app.js?v=20261021-3"></script>
 </body>
 </html>

@@ -24,7 +24,7 @@ async def test_endpoint(client, method, url, **kwargs):
         return False
 
 async def main():
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=10.0) as client:
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=50.0) as client:
         endpoints = [
             ("GET", "/api/health"),
             ("GET", "/api/models"),

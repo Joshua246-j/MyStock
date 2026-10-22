@@ -93,6 +93,9 @@
             document.documentElement.classList.toggle('light', !isDark);
             document.documentElement.dataset.density = density === 'compact' ? 'compact' : 'comfortable';
             document.documentElement.dataset.advanced = currentSettings.show_advanced_metrics === false ? 'false' : 'true';
+            try {
+                localStorage.setItem('stockrag.theme', isDark ? 'dark' : 'light');
+            } catch (_) {}
         }
 
         function renderSettingsControls(data) {
@@ -317,6 +320,9 @@
             const next = isDark ? 'light' : 'dark';
             applyTheme(next);
             currentSettings.theme = next;
+            try {
+                localStorage.setItem('stockrag.theme', next);
+            } catch (_) {}
             fetch('/api/settings', {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
@@ -324,6 +330,15 @@
             }).catch(() => {});
         }
         window.toggleTheme = toggleTheme;
+
+        function startNewChat() {
+            showView('ai');
+            resetChatSession();
+            if (window.innerWidth <= 768) {
+                toggleSidebar(false);
+            }
+        }
+        window.startNewChat = startNewChat;
 
         function setActiveNavigation(route) {
             document.querySelectorAll('.dock-btn[data-route], .sidebar-nav-btn[data-route], .bottom-app-nav .nav-item[data-route], .top-nav-dock .nav-item[data-route], .nav-item[data-route]').forEach(button => {
@@ -1457,47 +1472,103 @@
             renderLandingNews();
         }
 
+        let newsViewMode = 'grid'; // 'grid' or 'wire'
+        let newsTopicFilter = 'all'; // 'all', 'earnings', 'macro', 'tech', 'deals'
+
+        window.setNewsViewMode = function(mode) {
+            newsViewMode = mode;
+            const gridBtn = document.getElementById('news-view-grid-btn');
+            const wireBtn = document.getElementById('news-view-wire-btn');
+            if (gridBtn && wireBtn) {
+                if (mode === 'grid') {
+                    gridBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold transition-all active bg-white dark:bg-white/15 text-apple-blue shadow-xs';
+                    wireBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold text-apple-gray hover:text-text-main transition-all';
+                } else {
+                    wireBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold transition-all active bg-white dark:bg-white/15 text-apple-blue shadow-xs';
+                    gridBtn.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold text-apple-gray hover:text-text-main transition-all';
+                }
+            }
+            renderLandingNews();
+        };
+
+        window.filterNewsTopic = function(topic) {
+            newsTopicFilter = topic;
+            document.querySelectorAll('.news-topic-pill').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.topic === topic);
+            });
+            renderLandingNews();
+        };
+
+        window.askAboutNews = function(item) {
+            if (!item) return;
+            const title = item.title || 'market news';
+            const ticker = item.ticker ? `$${item.ticker}` : 'the market';
+            const publisher = item.publisher || 'financial wire';
+            const prompt = `Analyze this breaking news for ${ticker}: "${title}" (Source: ${publisher}). What is the financial impact, market sentiment, and key risk/reward takeaways?`;
+            
+            showView('chat');
+            const input = document.getElementById('chat-input') || document.getElementById('message-input');
+            if (input) {
+                input.value = prompt;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                const sendBtn = document.getElementById('chat-send-btn') || document.getElementById('send-button');
+                if (sendBtn) {
+                    setTimeout(() => sendBtn.click(), 120);
+                }
+            }
+        };
+
         function filterLandingNews(market) {
             landingNewsFilter = market;
-            document.querySelectorAll('.feed-filter').forEach(button => button.classList.toggle('active',button.dataset.marketFilter === market));
+            document.querySelectorAll('.feed-filter').forEach(button => button.classList.toggle('active', button.dataset.marketFilter === market));
+            if (market === 'saved') {
+                renderLandingNews();
+                return;
+            }
             if (market === 'us' || market === 'india' || market === 'all' || market === 'watchlist') {
                 newsVisibleCount = 20;
-                return loadLandingNews(landingLoadGeneration,true,++landingNewsGeneration,market === 'all' || market === 'watchlist' ? 'all' : market, true);
+                return loadLandingNews(landingLoadGeneration, true, ++landingNewsGeneration, market === 'all' || market === 'watchlist' ? 'all' : market, true);
             }
             renderLandingNews();
         }
 
-        // Instagram Post Interactive Handlers
-        window.toggleInstaLike = function(btn, storyId) {
-            const isLiked = btn.classList.toggle('liked');
-            const countEl = btn.querySelector('.insta-like-count');
-            let count = parseInt(countEl?.textContent || '0', 10);
-            count = isLiked ? count + 1 : Math.max(0, count - 1);
-            if (countEl) countEl.textContent = count;
-            try {
-                const likedStories = JSON.parse(localStorage.getItem('mystock_liked_stories') || '{}');
-                if (isLiked) likedStories[storyId] = count;
-                else delete likedStories[storyId];
-                localStorage.setItem('mystock_liked_stories', JSON.stringify(likedStories));
-            } catch (_) {}
-            if (window.lucide) lucide.createIcons();
+        let newsProviderFilter = 'all';
+        let newsSortMode = 'latest'; // 'latest', 'bullish', 'bearish'
+
+        window.filterNewsProvider = function(provider) {
+            newsProviderFilter = provider;
+            renderLandingNews();
         };
 
-        window.toggleInstaSave = function(btn, storyId) {
-            const isSaved = btn.classList.toggle('saved');
+        window.sortNewsFeed = function(sortMode) {
+            newsSortMode = sortMode;
+            renderLandingNews();
+        };
+
+        window.toggleNewsBookmark = function(btn, storyId) {
             try {
                 const savedStories = JSON.parse(localStorage.getItem('mystock_saved_stories') || '{}');
+                const isSaved = !savedStories[storyId];
                 if (isSaved) {
                     savedStories[storyId] = true;
-                    showToast('Post saved to bookmarks');
+                    showToast('Story saved to bookmarks');
                 } else {
                     delete savedStories[storyId];
-                    showToast('Post removed from bookmarks');
+                    showToast('Story removed from bookmarks');
                 }
                 localStorage.setItem('mystock_saved_stories', JSON.stringify(savedStories));
+                if (btn) {
+                    btn.classList.toggle('active-save', isSaved);
+                    btn.classList.toggle('text-amber-500', isSaved);
+                    btn.setAttribute('title', isSaved ? 'Remove bookmark' : 'Save bookmark');
+                }
+                if (landingNewsFilter === 'saved') {
+                    renderLandingNews();
+                }
             } catch (_) {}
             if (window.lucide) lucide.createIcons();
         };
+        window.toggleInstaSave = window.toggleNewsBookmark;
 
         window.shareNewsStory = async function(url) {
             try {
@@ -1505,61 +1576,50 @@
                     await navigator.clipboard.writeText(url);
                     showToast('Story link copied to clipboard!');
                 } else {
-                    showToast('Link ready to share: ' + (url || ''));
+                    showToast('Link ready: ' + (url || ''));
                 }
             } catch (_) {
                 showToast('Link ready to share');
             }
         };
 
-        function generateNewsGraphicHtml(item) {
-            const ticker = item.ticker || (item.market === 'india' ? 'NIFTY' : 'NASDAQ');
-            const publisher = item.publisher || 'Market Wire';
-            const safeTitle = escapeHtml(item.title || '');
-            const initial = String(publisher).trim().slice(0, 1).toUpperCase();
-            return `
-                <div class="w-full h-full p-5 flex flex-col justify-between bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white relative select-none">
-                    <svg class="absolute inset-0 w-full h-full opacity-10 pointer-events-none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox="0 0 100 100">
-                        <path d="M0 80 Q 25 20, 50 60 T 100 20 L 100 100 L 0 100 Z" fill="currentColor"/>
-                    </svg>
-                    <div class="flex items-center justify-between z-10">
-                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/10 backdrop-blur-md border border-white/15 text-indigo-300">
-                            $${escapeHtml(ticker)}
-                        </span>
-                        <span class="text-[10px] uppercase font-mono font-bold tracking-widest text-emerald-400 flex items-center gap-1">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> LIVE WIRE
-                        </span>
-                    </div>
-                    <div class="z-10 my-2">
-                        <p class="text-xs sm:text-sm font-bold line-clamp-3 leading-snug text-white/95">
-                            "${safeTitle}"
-                        </p>
-                    </div>
-                    <div class="flex items-center justify-between z-10 text-[10px] text-gray-400">
-                        <span>${escapeHtml(publisher)}</span>
-                        <span class="text-indigo-400 font-semibold">MyStock Terminal</span>
-                    </div>
-                </div>
-            `;
+        function analyzeNewsSentiment(text) {
+            const lower = String(text || '').toLowerCase();
+            const bullishWords = ['gain', 'surge', 'jump', 'rally', 'profit', 'record', 'high', 'buy', 'bull', 'expand', 'growth', 'rise', 'beat', 'soar', 'up', 'upgrade', 'dividend', 'deal', 'positive', 'strong', 'boost'];
+            const bearishWords = ['drop', 'fall', 'loss', 'decline', 'crash', 'slump', 'risk', 'threat', 'plunge', 'down', 'probe', 'lawsuit', 'sell', 'debt', 'cut', 'downgrade', 'warn', 'inflation', 'weak', 'pressure'];
+            
+            let bullScore = 0;
+            let bearScore = 0;
+            bullishWords.forEach(w => { if (lower.includes(w)) bullScore++; });
+            bearishWords.forEach(w => { if (lower.includes(w)) bearScore++; });
+
+            if (bullScore > bearScore) return { label: 'Bullish', class: 'sentiment-bullish', icon: 'trending-up', score: bullScore - bearScore };
+            if (bearScore > bullScore) return { label: 'Bearish', class: 'sentiment-bearish', icon: 'trending-down', score: bearScore - bullScore };
+            return { label: 'Market Wire', class: 'sentiment-neutral', icon: 'activity', score: 0 };
         }
 
-        function renderInstagramCard(item, isLanding = false) {
+        function matchNewsTopic(item, topic) {
+            if (topic === 'all') return true;
+            const text = `${item.title || ''} ${item.summary || ''}`.toLowerCase();
+            if (topic === 'earnings') return text.includes('earnings') || text.includes('profit') || text.includes('revenue') || text.includes('results') || text.includes('q1') || text.includes('q2') || text.includes('q3') || text.includes('q4') || text.includes('guidance');
+            if (topic === 'macro') return text.includes('fed') || text.includes('rate') || text.includes('inflation') || text.includes('rbi') || text.includes('economy') || text.includes('policy') || text.includes('central bank') || text.includes('gdp');
+            if (topic === 'tech') return text.includes('ai') || text.includes('chip') || text.includes('cloud') || text.includes('tech') || text.includes('apple') || text.includes('nvidia') || text.includes('software') || text.includes('google');
+            if (topic === 'deals') return text.includes('deal') || text.includes('merger') || text.includes('acquisition') || text.includes('stake') || text.includes('buyout') || text.includes('partner') || text.includes('ipo') || text.includes('buyback');
+            return true;
+        }
+
+        function renderModernNewsCard(item, isHero = false, isLanding = false) {
             const article = document.createElement('article');
-            article.className = `insta-news-card bg-white dark:bg-[#1c1c1e] border border-black/[0.08] dark:border-white/[0.08] rounded-3xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-300 ${isLanding ? 'w-full' : 'max-w-xl mx-auto'}`;
 
             const storyId = 'story_' + Math.abs((item.title || item.url || '').split('').reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0));
-            const likedStories = JSON.parse(localStorage.getItem('mystock_liked_stories') || '{}');
             const savedStories = JSON.parse(localStorage.getItem('mystock_saved_stories') || '{}');
-            const isLiked = !!likedStories[storyId];
             const isSaved = !!savedStories[storyId];
-            const baseLikes = Math.abs(storyId.length * 7 % 89) + 12;
-            const currentLikes = likedStories[storyId] || baseLikes;
 
-            const publisherName = escapeHtml(item.publisher || item.ticker || 'Market Publisher');
+            const publisherName = escapeHtml(item.publisher || item.ticker || 'Market Wire');
             const publisherInit = String(publisherName).trim().slice(0, 1).toUpperCase();
             
             // Format time ago
-            let timeAgo = 'Recent';
+            let timeAgo = 'Just now';
             if (item.published_at) {
                 const diffMs = Date.now() - Date.parse(item.published_at);
                 const diffMins = Math.floor(diffMs / 60000);
@@ -1571,122 +1631,375 @@
                 }
             }
 
-            const marketTag = item.market === 'india' ? 'NSE India' : (item.market === 'us' ? 'US Markets' : 'Global');
+            const marketTag = item.market === 'india' ? 'NSE India' : (item.market === 'us' ? 'US Markets' : 'Global Wire');
+            const sentiment = analyzeNewsSentiment(`${item.title || ''} ${item.summary || ''}`);
+            const hasImage = Boolean(item.image && typeof item.image === 'string' && item.image.trim().startsWith('http'));
 
-            article.innerHTML = `
-                <!-- Post Header -->
-                <div class="flex items-center justify-between px-4 py-3 border-b border-black/[0.04] dark:border-white/[0.05]">
-                    <div class="flex items-center gap-2.5 min-w-0">
-                        <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-xs" style="background: linear-gradient(135deg, #4f46e5, #06b6d4);">
-                            ${publisherInit}
-                        </div>
-                        <div class="min-w-0">
-                            <div class="flex items-center gap-1">
-                                <span class="text-xs font-bold text-gray-900 dark:text-gray-100 truncate max-w-[140px] sm:max-w-[180px]">${publisherName}</span>
-                                <svg class="w-3.5 h-3.5 text-blue-500 fill-current shrink-0" viewBox="0 0 24 24" title="Verified financial wire"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                                <span class="text-[11px] text-apple-gray shrink-0">· ${timeAgo}</span>
+            if (isHero) {
+                article.className = 'news-lead-banner mb-3 col-span-full p-4 sm:p-5';
+                article.innerHTML = `
+                    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1.5 text-xs">
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span> LEAD
+                                </span>
+                                <span class="news-meta-pub">${publisherName}</span>
+                                <span class="news-meta-time">· ${timeAgo}</span>
+                                <span class="sentiment-pill ${sentiment.class} ml-auto sm:ml-1">
+                                    <i data-lucide="${sentiment.icon}" class="w-2.5 h-2.5"></i> ${sentiment.label}
+                                </span>
                             </div>
-                            <span class="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 block">${marketTag}</span>
+                            <h2>
+                                <a href="${escapeHtml(item.url || '#')}" target="_blank" rel="noopener noreferrer" class="news-lead-title block">
+                                    ${escapeHtml(item.title || '')}
+                                </a>
+                            </h2>
+                            ${item.summary ? `
+                                <p class="mt-1.5 news-excerpt line-clamp-2">
+                                    ${escapeHtml(item.summary)}
+                                </p>
+                            ` : ''}
+                        </div>
+                        ${hasImage ? `
+                            <div class="news-thumb-container shrink-0 self-start">
+                                <img src="${escapeHtml(item.image)}" alt="" class="news-hero-thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.news-thumb-container')?.remove();">
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="mt-3 pt-2.5 border-t border-black/[0.05] dark:border-white/[0.08] flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            ${item.ticker ? `
+                                <button type="button" class="news-ticker-pill" title="Jump to ${item.ticker} chart" onclick="simulateSearch('${escapeHtml(item.ticker)}')">
+                                    $${escapeHtml(item.ticker)}
+                                </button>
+                            ` : ''}
+                            <button type="button" class="news-action-btn ai-btn" onclick='askAboutNews(${JSON.stringify(item).replace(/'/g, "\\'")})' title="Analyze story with AI Copilot">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Ask AI
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" class="news-action-btn ${isSaved ? 'active-save text-amber-500' : ''}" onclick="toggleNewsBookmark(this, '${storyId}')" title="${isSaved ? 'Remove bookmark' : 'Bookmark story'}">
+                                <i data-lucide="bookmark" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <a href="${escapeHtml(item.url || '#')}" target="_blank" rel="noopener noreferrer" class="news-action-btn" title="Read on original publisher">
+                                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                                <span class="text-[11px] font-semibold hidden sm:inline">Source</span>
+                            </a>
                         </div>
                     </div>
-                    <div class="flex items-center gap-1.5 shrink-0">
-                        ${item.ticker ? `<button type="button" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/5 dark:bg-white/10 hover:bg-apple-blue hover:text-white transition-colors text-text-main" title="Open ${item.ticker} in terminal">$${escapeHtml(item.ticker)}</button>` : ''}
-                        <button type="button" class="p-1 rounded-full text-apple-gray hover:text-gray-900 dark:hover:text-gray-100 transition" title="Share story" onclick="shareNewsStory('${escapeHtml(item.url || '')}')">
-                            <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
-                        </button>
+                `;
+                return article;
+            }
+
+            // Standard Editorial Card: Clean, compact horizontal layout
+            article.className = hasImage ? 'news-editorial-card p-3.5 sm:p-4' : 'news-editorial-card news-card-textonly p-3.5 sm:p-4';
+            article.innerHTML = `
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-1.5 mb-1 text-xs">
+                            <span class="news-meta-pub truncate max-w-[120px] sm:max-w-[150px]">${publisherName}</span>
+                            <span class="news-meta-time shrink-0">· ${timeAgo}</span>
+                            <span class="sentiment-pill ${sentiment.class} ml-auto shrink-0">
+                                <i data-lucide="${sentiment.icon}" class="w-2.5 h-2.5"></i> ${sentiment.label}
+                            </span>
+                        </div>
+                        <a href="${escapeHtml(item.url || '#')}" target="_blank" rel="noopener noreferrer" class="${hasImage ? 'news-title-link' : 'news-headline-stylish'} block font-semibold text-sm leading-snug">
+                            ${escapeHtml(item.title || '')}
+                        </a>
+                        ${item.summary ? `
+                            <p class="mt-1 news-excerpt line-clamp-2">
+                                ${escapeHtml(item.summary)}
+                            </p>
+                        ` : ''}
                     </div>
+                    ${hasImage ? `
+                        <div class="news-thumb-container shrink-0">
+                            <img src="${escapeHtml(item.image)}" alt="" class="news-thumb-compact" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.news-thumb-container')?.remove();">
+                        </div>
+                    ` : ''}
                 </div>
 
-                <!-- Post Media (16:9 Image or Dynamic Financial SVG Graphic) -->
-                <div class="relative w-full aspect-[16/9] overflow-hidden bg-black/5 dark:bg-black/30 group">
-                    ${item.image ? `
-                        <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title || '')}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.innerHTML = generateNewsGraphicHtml(${JSON.stringify(item).replace(/"/g, '&quot;')});">
-                    ` : generateNewsGraphicHtml(item)}
-                </div>
-
-                <!-- Instagram Engagement Bar -->
-                <div class="px-4 pt-3 pb-1 flex items-center justify-between text-gray-700 dark:text-gray-300">
-                    <div class="flex items-center gap-3">
-                        <button type="button" class="insta-like-btn ${isLiked ? 'liked' : ''} flex items-center gap-1 text-xs font-bold hover:text-rose-500 transition-colors" onclick="toggleInstaLike(this, '${storyId}')" title="Like this post">
-                            <i data-lucide="heart" class="w-4 h-4"></i>
-                            <span class="insta-like-count">${currentLikes}</span>
-                        </button>
-                        <button type="button" class="flex items-center gap-1 text-xs font-bold hover:text-apple-blue transition-colors" onclick='askAboutNews(${JSON.stringify(item).replace(/'/g, "\\'")})' title="Discuss story with ChatGPT Copilot">
-                            <i data-lucide="message-circle" class="w-4 h-4"></i>
+                <div class="mt-2.5 pt-2 border-t border-black/[0.04] dark:border-white/[0.06] flex items-center justify-between text-xs text-apple-gray">
+                    <div class="flex items-center gap-2">
+                        ${item.ticker ? `
+                            <button type="button" class="news-ticker-pill" title="Jump to ${item.ticker} chart" onclick="simulateSearch('${escapeHtml(item.ticker)}')">
+                                $${escapeHtml(item.ticker)}
+                            </button>
+                        ` : ''}
+                        <button type="button" class="news-action-btn ai-btn" onclick='askAboutNews(${JSON.stringify(item).replace(/'/g, "\\'")})' title="Analyze story with AI Copilot">
+                            <i data-lucide="sparkles" class="w-3 h-3"></i>
                             <span>Ask AI</span>
                         </button>
-                        <button type="button" class="hover:text-apple-blue transition-colors" onclick="shareNewsStory('${escapeHtml(item.url || '')}')" title="Copy link">
-                            <i data-lucide="send" class="w-4 h-4"></i>
-                        </button>
                     </div>
-                    <div class="flex items-center gap-2 text-xs font-semibold">
-                        <button type="button" class="insta-save-btn ${isSaved ? 'saved' : ''} hover:text-amber-500 transition-colors" onclick="toggleInstaSave(this, '${storyId}')" title="Save story">
-                            <i data-lucide="bookmark" class="w-4 h-4"></i>
+                    <div class="flex items-center gap-1">
+                        <button type="button" class="news-action-btn ${isSaved ? 'active-save text-amber-500' : ''}" onclick="toggleNewsBookmark(this, '${storyId}')" title="${isSaved ? 'Remove bookmark' : 'Bookmark story'}">
+                            <i data-lucide="bookmark" class="w-3.5 h-3.5"></i>
                         </button>
-                        <a href="${escapeHtml(item.url || '#')}" target="_blank" rel="noopener noreferrer" class="text-apple-gray hover:text-apple-blue flex items-center gap-1" title="Read full article at source">
-                            <span>Source</span>
-                            <i data-lucide="external-link" class="w-3 h-3"></i>
+                        <a href="${escapeHtml(item.url || '#')}" target="_blank" rel="noopener noreferrer" class="news-action-btn" title="Read on source">
+                            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
                         </a>
                     </div>
                 </div>
-
-                <!-- Post Caption & Content -->
-                <div class="px-4 pb-4 pt-1 space-y-1.5">
-                    <a href="${escapeHtml(item.url || '#')}" target="_blank" rel="noopener noreferrer" class="block font-bold text-[14px] sm:text-[15px] leading-snug text-gray-900 dark:text-gray-100 hover:text-apple-blue transition-colors">
-                        ${escapeHtml(item.title || '')}
-                    </a>
-                    ${item.summary ? `
-                        <p class="text-xs text-apple-gray leading-relaxed line-clamp-2">
-                            ${escapeHtml(item.summary)}
-                        </p>
-                    ` : ''}
-                    <div class="flex flex-wrap gap-1.5 pt-1 text-[11px] font-semibold text-apple-blue">
-                        <span>#${escapeHtml(item.ticker || 'Market')}</span>
-                        <span>#Investing</span>
-                        <span>#FinanceNews</span>
-                    </div>
-                </div>
             `;
-
-            // If ticker button is clicked, open search
-            const tickerBtn = article.querySelector('button[title^="Open"]');
-            if (tickerBtn && item.ticker) {
-                tickerBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    simulateSearch(item.ticker);
-                });
-            }
-
             return article;
         }
 
+        function renderModernNewsWireRow(item) {
+            const row = document.createElement('div');
+            row.className = 'news-wire-row';
+
+            const storyId = 'story_' + Math.abs((item.title || item.url || '').split('').reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0));
+            const savedStories = JSON.parse(localStorage.getItem('mystock_saved_stories') || '{}');
+            const isSaved = !!savedStories[storyId];
+
+            let timeAgo = 'Now';
+            if (item.published_at) {
+                const diffMs = Date.now() - Date.parse(item.published_at);
+                const diffMins = Math.floor(diffMs / 60000);
+                if (diffMins < 60) timeAgo = `${Math.max(1, diffMins)}m ago`;
+                else timeAgo = `${Math.floor(diffMins / 60)}h ago`;
+            }
+
+            const sentiment = analyzeNewsSentiment(item.title);
+            const ticker = item.ticker || 'WIRE';
+
+            row.innerHTML = `
+                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                    <span class="text-[10px] font-mono font-semibold text-apple-gray shrink-0 w-12">${timeAgo}</span>
+                    <button type="button" class="news-ticker-pill shrink-0" onclick="simulateSearch('${escapeHtml(ticker)}')">$${escapeHtml(ticker)}</button>
+                    <span class="sentiment-pill ${sentiment.class} shrink-0 hidden sm:inline-flex">
+                        <i data-lucide="${sentiment.icon}" class="w-2.5 h-2.5"></i> ${sentiment.label}
+                    </span>
+                    <a href="${escapeHtml(item.url || '#')}" target="_blank" rel="noopener noreferrer" class="news-wire-title truncate transition-colors flex-1">
+                        ${escapeHtml(item.title || '')}
+                    </a>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="news-meta-time hidden md:inline truncate max-w-[110px] font-semibold">${escapeHtml(item.publisher || '')}</span>
+                    <button type="button" class="news-action-btn ai-btn p-1.5" onclick='askAboutNews(${JSON.stringify(item).replace(/'/g, "\\'")})' title="Ask AI about story">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button type="button" class="news-action-btn ${isSaved ? 'active-save text-amber-500' : ''} p-1.5" onclick="toggleNewsBookmark(this, '${storyId}')" title="${isSaved ? 'Remove bookmark' : 'Bookmark story'}">
+                        <i data-lucide="bookmark" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <a href="${escapeHtml(item.url || '#')}" target="_blank" rel="noopener noreferrer" class="news-action-btn p-1.5" title="External link">
+                        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                    </a>
+                </div>
+            `;
+            return row;
+        }
+
+        function updateNewsIntelligenceRail(items) {
+            if (!Array.isArray(items) || !items.length) return;
+
+            // 1. Calculate Sentiment Breakdown
+            let bullCount = 0;
+            let bearCount = 0;
+            const tickerCounts = {};
+
+            items.forEach(item => {
+                const text = `${item.title || ''} ${item.summary || ''}`.toLowerCase();
+                const sentiment = analyzeNewsSentiment(text);
+                if (sentiment.label === 'Bullish') bullCount++;
+                else if (sentiment.label === 'Bearish') bearCount++;
+
+                const ticker = item.ticker || (item.related_tickers && item.related_tickers[0]);
+                if (ticker && ticker !== '^NSEI' && ticker !== '^BSESN') {
+                    tickerCounts[ticker] = (tickerCounts[ticker] || 0) + 1;
+                }
+            });
+
+            const totalSentiment = Math.max(1, bullCount + bearCount);
+            const posPct = Math.round((bullCount / totalSentiment) * 100);
+            const negPct = 100 - posPct;
+
+            const posEl = document.getElementById('news-sentiment-positive');
+            const negEl = document.getElementById('news-sentiment-negative');
+            const barPos = document.getElementById('news-sentiment-bar-pos');
+            const barNeg = document.getElementById('news-sentiment-bar-neg');
+            const statusEl = document.getElementById('news-sentiment-status');
+
+            if (posEl) posEl.textContent = `${posPct}% Positive`;
+            if (negEl) negEl.textContent = `${negPct}% Negative`;
+            if (barPos) barPos.style.width = `${posPct}%`;
+            if (barNeg) barNeg.style.width = `${negPct}%`;
+            if (statusEl) {
+                if (posPct >= 55) {
+                    statusEl.textContent = 'BULLISH';
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20';
+                } else if (posPct <= 45) {
+                    statusEl.textContent = 'CAUTIOUS';
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20';
+                } else {
+                    statusEl.textContent = 'BALANCED';
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20';
+                }
+            }
+
+            // 2. Populate Trending Tickers
+            const trendingContainer = document.getElementById('news-trending-tickers');
+            if (trendingContainer) {
+                const sortedTickers = Object.entries(tickerCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 8);
+
+                if (sortedTickers.length) {
+                    trendingContainer.innerHTML = sortedTickers.map(([sym, cnt]) => `
+                        <button type="button" class="news-ticker-pill flex items-center gap-1" onclick="simulateSearch('${escapeHtml(sym)}')">
+                            <span>$${escapeHtml(sym)}</span>
+                            <span class="opacity-60 text-[9px]">(${cnt})</span>
+                        </button>
+                    `).join('');
+                } else {
+                    trendingContainer.innerHTML = '<span class="text-xs text-apple-gray">Broad market coverage</span>';
+                }
+            }
+
+            // 3. Render Watchlist context
+            renderNewsContext();
+        }
+
+        function populateProviderDropdown(items) {
+            const providerSelect = document.getElementById('news-feed-provider');
+            if (!providerSelect || !Array.isArray(items)) return;
+
+            const publishers = new Set();
+            items.forEach(it => {
+                if (it.publisher && typeof it.publisher === 'string' && it.publisher.trim()) {
+                    publishers.add(it.publisher.trim());
+                }
+            });
+
+            const currentVal = newsProviderFilter;
+            const sortedPublishers = [...publishers].sort();
+
+            const optionsHtml = ['<option value="all">All Publishers</option>'];
+            sortedPublishers.forEach(pub => {
+                const isSelected = pub === currentVal ? 'selected' : '';
+                optionsHtml.push(`<option value="${escapeHtml(pub)}" ${isSelected}>${escapeHtml(pub)}</option>`);
+            });
+
+            providerSelect.innerHTML = optionsHtml.join('');
+            if (sortedPublishers.includes(currentVal)) {
+                providerSelect.value = currentVal;
+            } else {
+                providerSelect.value = 'all';
+                newsProviderFilter = 'all';
+            }
+        }
+
         function renderLandingNews() {
-            const filtered = landingNewsFilter === 'all' ? landingNewsItems : landingNewsFilter === 'watchlist' ? landingNewsItems.filter(item => watchlistSymbols.has(item.ticker) || (item.related_tickers || []).some(symbol => watchlistSymbols.has(symbol))) : landingNewsItems.filter(item => item.market === landingNewsFilter);
-            const items = landingNewsSearch ? filtered.filter(item => `${item.title || ''} ${item.publisher || ''} ${item.ticker || ''} ${item.summary || ''}`.toLocaleLowerCase().includes(landingNewsSearch)) : filtered;
+            const savedStories = JSON.parse(localStorage.getItem('mystock_saved_stories') || '{}');
+            
+            // Dynamically update providers dropdown
+            populateProviderDropdown(landingNewsItems);
+
+            // Filter by market
+            let filtered = landingNewsItems;
+            if (landingNewsFilter === 'saved') {
+                filtered = landingNewsItems.filter(item => {
+                    const id = 'story_' + Math.abs((item.title || item.url || '').split('').reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0));
+                    return !!savedStories[id];
+                });
+            } else if (landingNewsFilter === 'watchlist') {
+                filtered = landingNewsItems.filter(item => watchlistSymbols.has(item.ticker) || (item.related_tickers || []).some(symbol => watchlistSymbols.has(symbol)));
+            } else if (landingNewsFilter === 'india' || landingNewsFilter === 'us') {
+                filtered = landingNewsItems.filter(item => item.market === landingNewsFilter);
+            }
+
+            // Filter by publisher
+            if (newsProviderFilter !== 'all') {
+                filtered = filtered.filter(item => (item.publisher || '').trim().toLowerCase() === newsProviderFilter.trim().toLowerCase());
+            }
+
+            // Filter by topic
+            if (newsTopicFilter !== 'all') {
+                filtered = filtered.filter(item => matchNewsTopic(item, newsTopicFilter));
+            }
+
+            // Filter by search
+            let items = landingNewsSearch 
+                ? filtered.filter(item => `${item.title || ''} ${item.publisher || ''} ${item.ticker || ''} ${item.summary || ''}`.toLocaleLowerCase().includes(landingNewsSearch)) 
+                : filtered;
+
+            // Sort stories
+            if (newsSortMode === 'bullish') {
+                items = [...items].sort((a, b) => {
+                    const sA = analyzeNewsSentiment(`${a.title || ''} ${a.summary || ''}`);
+                    const sB = analyzeNewsSentiment(`${b.title || ''} ${b.summary || ''}`);
+                    return (sB.label === 'Bullish' ? 1 : 0) - (sA.label === 'Bullish' ? 1 : 0);
+                });
+            } else if (newsSortMode === 'bearish') {
+                items = [...items].sort((a, b) => {
+                    const sA = analyzeNewsSentiment(`${a.title || ''} ${a.summary || ''}`);
+                    const sB = analyzeNewsSentiment(`${b.title || ''} ${b.summary || ''}`);
+                    return (sB.label === 'Bearish' ? 1 : 0) - (sA.label === 'Bearish' ? 1 : 0);
+                });
+            }
+
             const count = document.getElementById('news-feed-count');
-            if (count) count.textContent = `${items.length} ${items.length === 1 ? 'story' : 'stories'}${landingNewsMeta?.total_available > landingNewsItems.length ? ` · ${landingNewsMeta.total_available} found` : ''} · newest first`;
+            if (count) {
+                count.textContent = `${items.length} ${items.length === 1 ? 'story' : 'stories'}${landingNewsMeta?.total_available > landingNewsItems.length ? ` · ${landingNewsMeta.total_available} indexed` : ''} · ${newsSortMode === 'latest' ? 'newest first' : (newsSortMode === 'bullish' ? 'bullish priority' : 'bearish priority')}`;
+            }
             const sourceLine = document.getElementById('news-feed-source');
             document.getElementById('news-load-more')?.classList.add('hidden');
             if (sourceLine) {
-                sourceLine.textContent = 'Headlines are fetched in the background from publisher RSS feeds and news providers with source attribution.';
+                sourceLine.textContent = 'Headlines indexed across publisher RSS feeds and market data providers with full source attribution.';
             }
 
+            // Update Right Intelligence Rail
+            updateNewsIntelligenceRail(landingNewsItems);
+
+            // Render Containers
             for (const container of [document.getElementById('landing-news-feed'), document.getElementById('news-feed')]) {
                 if (!container) continue;
                 if (!items.length) {
-                    container.innerHTML = `<div class="py-10 text-center"><p class="text-sm text-apple-gray">${landingNewsItems.length ? 'No headlines match this filter.' : 'No recent stories were returned by the selected publishers.'}</p><button class="mt-2 min-h-11 px-3 text-sm font-semibold text-apple-blue" onclick="refreshLandingNews()">Refresh sources</button></div>`;
+                    container.innerHTML = `
+                        <div class="py-12 text-center col-span-full">
+                            <i data-lucide="newspaper" class="w-8 h-8 mx-auto text-apple-gray mb-2"></i>
+                            <p class="text-sm font-semibold text-text-main">${landingNewsFilter === 'saved' ? 'No saved bookmarks yet.' : (landingNewsItems.length ? 'No headlines match the current filter or topic.' : 'No recent stories were returned by the selected publishers.')}</p>
+                            <p class="text-xs text-apple-gray mt-1">${landingNewsFilter === 'saved' ? 'Click the bookmark icon on any story to save it.' : 'Try selecting All Markets, resetting provider, or refreshing the feed.'}</p>
+                            <button class="mt-3 min-h-9 px-4 rounded-xl bg-apple-blue/10 text-apple-blue text-xs font-semibold hover:bg-apple-blue hover:text-white transition-all" onclick="filterLandingNews('all'); filterNewsTopic('all'); filterNewsProvider('all'); refreshLandingNews();">Reset all filters</button>
+                        </div>
+                    `;
                     continue;
                 }
-                const isLanding = container.id === 'landing-news-feed';
-                const visibleItems = isLanding ? items.slice(0, 4) : items.slice(0, newsVisibleCount);
-                
-                container.replaceChildren(...visibleItems.map(item => renderInstagramCard(item, isLanding)));
 
-                const more = document.getElementById('news-load-more');
-                if (container.id === 'news-feed' && more) {
-                    const remaining = Math.max(0, items.length - newsVisibleCount);
-                    more.classList.toggle('hidden', remaining === 0);
-                    more.textContent = remaining ? `Load ${Math.min(20, remaining)} more stories · ${remaining} remaining` : 'All available stories shown';
+                const isLanding = container.id === 'landing-news-feed';
+                
+                if (isLanding) {
+                    // Landing page preview: 4 compact editorial cards
+                    const visibleItems = items.slice(0, 4);
+                    container.className = 'news-terminal-grid pt-2';
+                    container.replaceChildren(...visibleItems.map(item => renderModernNewsCard(item, false, true)));
+                } else {
+                    // Main News Page: either Bento Grid or Dense Wire View
+                    const visibleItems = items.slice(0, newsVisibleCount);
+                    container.replaceChildren();
+
+                    if (newsViewMode === 'wire') {
+                        container.className = 'news-wire-container pt-1';
+                        visibleItems.forEach(item => {
+                            container.appendChild(renderModernNewsWireRow(item));
+                        });
+                    } else {
+                        // Bento Editorial Grid View
+                        container.className = 'news-terminal-grid pt-1';
+                        visibleItems.forEach((item, index) => {
+                            const isHero = (index === 0 && !landingNewsSearch && newsTopicFilter === 'all' && landingNewsFilter === 'all' && newsProviderFilter === 'all');
+                            container.appendChild(renderModernNewsCard(item, isHero, false));
+                        });
+                    }
+
+                    const more = document.getElementById('news-load-more');
+                    if (more) {
+                        const remaining = Math.max(0, items.length - newsVisibleCount);
+                        more.classList.toggle('hidden', remaining === 0);
+                        more.textContent = remaining ? `Load ${Math.min(20, remaining)} more stories · ${remaining} remaining` : 'All available stories shown';
+                    }
                 }
             }
             if (window.lucide) lucide.createIcons();

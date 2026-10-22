@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stockrag-data-pvc
+  namespace: stockrag
+  labels:
+    app.kubernetes.io/name: stockrag
+    app.kubernetes.io/component: data-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stockrag-uploads-pvc
+  namespace: stockrag
+  labels:
+    app.kubernetes.io/name: stockrag
+    app.kubernetes.io/component: uploads-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models-pvc
+  namespace: stockrag
+  labels:
+    app.kubernetes.io/name: stockrag
+    app.kubernetes.io/component: model-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

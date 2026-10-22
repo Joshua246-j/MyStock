@@ -1,0 +1,46 @@
+# Version control
+.git
+.gitignore
+
+# Virtual environment and IDE
+.venv
+venv/
+env/
+.idea
+.vscode
+.audit-run
+.husky
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+
+# Testing & coverage
+.pytest_cache/
+.pytest-tmp/
+.coverage
+htmlcov/
+
+# Node & package manager
+node_modules/
+
+# Secrets and environment files
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Logs and temporary files
+*.log
+*.tmp
+scratch/
+
+# Local databases and runtime stores (persisted via named Docker volumes)
+data/stock_terminal.db*
+data/faiss/*
+!data/faiss/.gitkeep
+uploads/*
+!uploads/.gitkeep

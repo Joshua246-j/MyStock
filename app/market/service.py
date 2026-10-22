@@ -118,6 +118,18 @@ class MarketDataService:
                 logger.exception("stored_history_read_failed", extra={"symbol": resolved_symbol})
 
         if fetch_func_name == "get_history" and isinstance(data, dict) and data.get("success") and not used_local_stale_history:
+            raw_data = data.get("data")
+            if isinstance(raw_data, list):
+                cleaned_data = []
+                for b in raw_data:
+                    if isinstance(b, dict):
+                        o = b.get("Open") if "Open" in b else b.get("open")
+                        h = b.get("High") if "High" in b else b.get("high")
+                        l = b.get("Low") if "Low" in b else b.get("low")
+                        c = b.get("Close") if "Close" in b else b.get("close")
+                        if None not in (o, h, l, c):
+                            cleaned_data.append(b)
+                data["data"] = cleaned_data
             rows, validation_error = validate_ohlcv_rows(data.get("data"))
             if validation_error:
                 logger.error("market_history_validation_failed", extra={"symbol": resolved_symbol, "provider": data.get("source", "unknown"), "reason": validation_error})

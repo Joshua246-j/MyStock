@@ -125,6 +125,15 @@ class YFinanceProvider(MarketDataProvider):
             hist = ticker.history(period=period, interval=interval, auto_adjust=auto_adjust)
             if hist.empty:
                 raise ValueError("No historical data found")
+
+            # Clean out any incomplete bars with NaN or non-positive values
+            hist = hist.dropna(subset=[col for col in ['Open', 'High', 'Low', 'Close'] if col in hist.columns])
+            for col in ['Open', 'High', 'Low', 'Close']:
+                if col in hist.columns:
+                    hist = hist[pd.to_numeric(hist[col], errors='coerce') > 0]
+
+            if hist.empty:
+                raise ValueError("No valid historical price bars found")
             
             hist = hist.reset_index()
             if 'Date' in hist.columns:

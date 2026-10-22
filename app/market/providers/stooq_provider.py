@@ -86,6 +86,13 @@ class StooqProvider(MarketDataProvider):
             elif interval == "1mo":
                 df = df.assign(Date=pd.to_datetime(df["Date"])).set_index("Date").resample("ME").agg({"Open":"first", "High":"max", "Low":"min", "Close":"last", "Volume":"sum"}).dropna().reset_index()
             
+            df = df.dropna(subset=[col for col in ['Open', 'High', 'Low', 'Close'] if col in df.columns])
+            for col in ['Open', 'High', 'Low', 'Close']:
+                if col in df.columns:
+                    df = df[pd.to_numeric(df[col], errors='coerce') > 0]
+            if df.empty:
+                return {"success": False, "error": "No valid historical data found", "source": "stooq"}
+
             if 'Date' in df.columns:
                 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
             
