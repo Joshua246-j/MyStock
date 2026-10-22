@@ -44,3 +44,11 @@ data/faiss/*
 !data/faiss/.gitkeep
 uploads/*
 !uploads/.gitkeep
+
+# Documentation, test suites, k8s manifests, and dev scripts (not needed in container image)
+docs/
+tests/
+scripts/
+k8s/
+*.md
+Guide.txt

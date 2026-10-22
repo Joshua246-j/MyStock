@@ -1,0 +1,6 @@
+# Ensure consistent line endings across operating systems
+* text=auto
+
+# Shell scripts and Docker files MUST have Unix LF line endings to run inside containers
+*.sh text eol=lf
+Dockerfile text eol=lf
