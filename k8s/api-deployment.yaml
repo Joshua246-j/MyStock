@@ -30,7 +30,7 @@ spec:
         fsGroup: 10001
       containers:
         - name: stock-terminal
-          image: stockrag-api:1.0
+          image: joshuajomon246/stockterminal:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

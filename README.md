@@ -247,13 +247,25 @@ The interactive OpenAPI documentation and Swagger schema are accessible live at 
 
 ## 🐳 Containerization & Kubernetes Deployment
 
-MyStock AI Terminal supports full containerized execution via Docker, Docker Compose, and Kubernetes (Minikube).
+MyStock AI Terminal supports full containerized execution via Docker, Docker Compose, and Kubernetes.
 
-### Docker Compose (Quickstart)
+**Official Docker Hub Image:** [`joshuajomon246/stockterminal:latest`](https://hub.docker.com/repository/docker/joshuajomon246/stockterminal/general)
+
+### Run Anywhere with Docker (Official Hub Image)
+```bash
+# Pull and run the official pre-built image
+docker pull joshuajomon246/stockterminal:latest
+docker run -d -p 8000:8000 --name stockterminal joshuajomon246/stockterminal:latest
+```
+
+### Docker Compose (Multi-Service with Ollama)
 
 ```bash
-# Start backend API and Ollama services
+# Build / pull and start backend API and Ollama services
 docker compose up -d
+
+# Push new builds to Docker Hub
+docker compose push api
 
 # Verify deployment health
 python scripts/verify_deployment.py --url http://localhost:8000

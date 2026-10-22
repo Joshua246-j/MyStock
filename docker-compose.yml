@@ -19,6 +19,7 @@ services:
 
   # Stock Terminal FastAPI backend + self-contained frontend
   api:
+    image: joshuajomon246/stockterminal:latest
     build:
       context: .
       dockerfile: Dockerfile

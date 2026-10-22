@@ -105,6 +105,7 @@ function Show-Menu {
     Write-Host "  [7] Docker Compose: Check Status (docker compose ps)" -ForegroundColor White
     Write-Host "  [8] Docker Compose: View Logs (docker compose logs -f api)" -ForegroundColor White
     Write-Host "  [9] Docker Compose: Teardown Services (docker compose down)" -ForegroundColor White
+    Write-Host "  [D] Docker Hub: Build, Tag & Push (joshuajomon246/stockterminal)" -ForegroundColor Yellow
     Write-Host "  [K1] Kubernetes: Compile Manifests (kubectl kustomize k8s/)" -ForegroundColor White
     Write-Host "  [K2] Kubernetes: Deploy Cluster (kubectl apply -k k8s/)" -ForegroundColor White
     Write-Host "  [K3] Kubernetes: Check Pods & PVCs (kubectl get pods,pvc -n stockrag)" -ForegroundColor White
@@ -129,6 +130,8 @@ if ($args.Count -eq 0) {
             "7" { docker compose ps; Read-Host "`nPress Enter to continue..." }
             "8" { docker compose logs -f api; Read-Host "`nPress Enter to continue..." }
             "9" { docker compose down; Read-Host "`nPress Enter to continue..." }
+            "D" { & powershell -ExecutionPolicy Bypass -File scripts/push_dockerhub.ps1; Read-Host "`nPress Enter to continue..." }
+            "d" { & powershell -ExecutionPolicy Bypass -File scripts/push_dockerhub.ps1; Read-Host "`nPress Enter to continue..." }
             "K1" { kubectl kustomize k8s/; Read-Host "`nPress Enter to continue..." }
             "K2" { kubectl apply -k k8s/; Read-Host "`nPress Enter to continue..." }
             "K3" { kubectl get pods,svc,pvc -n stockrag; Read-Host "`nPress Enter to continue..." }
