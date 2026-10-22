@@ -7,8 +7,8 @@ import time
 from app.config import OLLAMA_BASE_URL, OLLAMA_MODEL, EMBEDDING_MODEL
 
 _MODEL_CATALOG_TTL_SECONDS = 5.0
-_MODEL_CATALOG_CACHE: dict[int, tuple[float, dict]] = {}
-_MODEL_CATALOG_PENDING: dict[int, asyncio.Task] = {}
+_MODEL_CATALOG_CACHE: dict[tuple[int, str], tuple[float, dict]] = {}
+_MODEL_CATALOG_PENDING: dict[tuple[int, str], asyncio.Task] = {}
 
 
 def _copy_catalog(catalog: dict) -> dict:
@@ -137,23 +137,25 @@ class OllamaClient:
         return catalog.get("available") is True and any(name == selected_model or name.startswith(selected_model + ":") for name in names)
 
     async def list_models(self, timeout: float = 5):
-        loop_key = id(asyncio.get_running_loop())
-        cached = _MODEL_CATALOG_CACHE.get(loop_key)
+        cache_key = (id(asyncio.get_running_loop()), self.base_url)
+        cached = _MODEL_CATALOG_CACHE.get(cache_key)
         if cached and time.monotonic() - cached[0] < _MODEL_CATALOG_TTL_SECONDS:
             return _copy_catalog(cached[1])
-        pending = _MODEL_CATALOG_PENDING.get(loop_key)
+        pending = _MODEL_CATALOG_PENDING.get(cache_key)
         if pending is None:
             pending = asyncio.create_task(self._fetch_model_catalog(timeout))
-            _MODEL_CATALOG_PENDING[loop_key] = pending
-        try:
-            result = await pending
-            return _copy_catalog(result)
-        finally:
-            if _MODEL_CATALOG_PENDING.get(loop_key) is pending:
-                _MODEL_CATALOG_PENDING.pop(loop_key, None)
+            _MODEL_CATALOG_PENDING[cache_key] = pending
+            pending.add_done_callback(
+                lambda task: _MODEL_CATALOG_PENDING.pop(cache_key, None)
+                if _MODEL_CATALOG_PENDING.get(cache_key) is task else None
+            )
+        # A caller timing out must not cancel the in-flight fetch shared by
+        # other requests. The HTTP request itself still has its own timeout.
+        result = await asyncio.shield(pending)
+        return _copy_catalog(result)
 
     async def _fetch_model_catalog(self, timeout: float) -> dict:
-        loop_key = id(asyncio.get_running_loop())
+        cache_key = (id(asyncio.get_running_loop()), self.base_url)
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.get(f"{self.base_url}/api/tags")
@@ -162,7 +164,7 @@ class OllamaClient:
                 names = sorted({str(item.get("name", "")).strip() for item in catalog if self._supports(item, "generation")})
                 embeddings = sorted({str(item.get("name", "")).strip() for item in catalog if self._supports(item, "embedding")})
                 result = {"available": True, "models": names, "embedding_models": embeddings, "source": "local_ollama"}
-                _MODEL_CATALOG_CACHE[loop_key] = (time.monotonic(), result)
+                _MODEL_CATALOG_CACHE[cache_key] = (time.monotonic(), result)
                 return _copy_catalog(result)
         except (httpx.HTTPError, ValueError) as exc:
             return {"available": False, "models": [], "embedding_models": [], "source": "local_ollama", "error": str(exc)}

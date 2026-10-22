@@ -4,6 +4,8 @@ services:
     image: ollama/ollama:latest
     container_name: stockrag-ollama
     restart: unless-stopped
+    cpus: 2.0
+    mem_limit: 2g
     ports:
       - "11434:11434"
     volumes:
@@ -25,6 +27,8 @@ services:
       dockerfile: Dockerfile
     container_name: stockrag-api
     restart: unless-stopped
+    cpus: 1.5
+    mem_limit: 768m
     ports:
       - "8000:8000"
     environment:

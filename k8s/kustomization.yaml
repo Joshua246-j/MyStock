@@ -6,7 +6,6 @@ namespace: stockrag
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.yaml
   - pvc.yaml
   - ollama-deployment.yaml
   - ollama-service.yaml
