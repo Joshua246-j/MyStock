@@ -454,6 +454,14 @@ def test_document_numeric_validation_uses_exact_source_when_model_drops_value():
     assert _missing_research_sections(fallback, require_sources=True) == []
 
 
+def test_document_numeric_answer_rejects_malformed_amount_and_unrelated_percent():
+    passage = {
+        "content": "Apple reported total net sales of .5 billion, an increase of 7.8% year-over-year.",
+        "source": "Apple FY2025 Financial Report",
+    }
+    assert _document_numeric_fact("What was Apple's total revenue in FY2025?", [passage]) is None
+
+
 def test_numeric_document_question_uses_exact_extracted_value_without_calling_model(monkeypatch):
     class MockRetriever:
         def retrieve_context(self, *args, **kwargs):

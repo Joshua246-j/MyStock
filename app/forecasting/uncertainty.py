@@ -10,7 +10,7 @@ logger = logging.getLogger("stockrag.forecasting.uncertainty")
 
 
 class UncertaintyEngine:
-    """Computes calibrated prediction intervals and enforces abstention boundaries."""
+    """Computes residual-based intervals and enforces abstention boundaries."""
 
     @staticmethod
     def compute_conformal_interval(
@@ -19,10 +19,10 @@ class UncertaintyEngine:
         residuals: np.ndarray,
         confidence_level: float = 0.80,
     ) -> dict[str, Any]:
-        """Compute conformal prediction interval from empirical out-of-sample residuals.
+        """Compute a residual interval and report its calibration limits.
 
-        Guarantees non-parametric, calibrated coverage reflecting the actual empirical
-        error distribution rather than assuming Gaussian i.i.d. normality.
+        Quantiles and empirical coverage use the same walk-forward residual sample,
+        so coverage is descriptive and does not imply independent calibration.
         """
         residuals_arr = np.asarray(residuals, dtype=float)
         valid_residuals = residuals_arr[np.isfinite(residuals_arr)]
@@ -31,17 +31,17 @@ class UncertaintyEngine:
         alpha = 1.0 - confidence_level
 
         if n_res >= 15:
-            # Empirical conformal quantiles
+            # Empirical quantiles of the walk-forward residuals.
             q_lower = float(np.percentile(valid_residuals, (alpha / 2.0) * 100.0))
             q_upper = float(np.percentile(valid_residuals, (1.0 - alpha / 2.0) * 100.0))
-            method = "empirical_conformal_quantiles"
+            method = "walk_forward_residual_quantiles"
         else:
             # Fallback to Student-t distribution with fat tails (df=4)
             std_res = float(np.std(valid_residuals, ddof=1)) if n_res > 2 else 0.03
             t_multiplier = 1.53 if confidence_level <= 0.80 else 2.13
             q_lower = -t_multiplier * std_res
             q_upper = t_multiplier * std_res
-            method = "fat_tailed_t_distribution_fallback"
+            method = "student_t_parametric_fallback"
 
         lower_return = pred_return + q_lower
         upper_return = pred_return + q_upper
@@ -65,12 +65,14 @@ class UncertaintyEngine:
             emp_cov_pct = round(confidence_level * 100.0, 1)
 
         cov_gap = round(emp_cov_pct - (confidence_level * 100.0), 1)
-        if abs(cov_gap) <= 5.0:
-            cal_verdict = "Well Calibrated"
+        if n_res < 15:
+            cal_verdict = "Not assessed (fewer than 15 residual samples)"
+        elif abs(cov_gap) <= 5.0:
+            cal_verdict = "Descriptive in-sample coverage (not independent calibration)"
         elif cov_gap < -5.0:
-            cal_verdict = "Undercovering (Wider error tails)"
+            cal_verdict = "Descriptive undercoverage (same residual sample)"
         else:
-            cal_verdict = "Conservative (Overcovering)"
+            cal_verdict = "Descriptive overcoverage (same residual sample)"
 
         return {
             "confidence_level": confidence_level,
@@ -119,13 +121,30 @@ class UncertaintyEngine:
                 "severity": "high",
             }
 
-        # 2. Extreme staleness check
+        # A market forecast is not reliable when its observation cutoff is stale
+        # or unknown. Do not emit a numeric projection on unverifiable inputs.
         if freshness == "STALE":
             return {
-                "should_abstain": False,
-                "status": "stale_data_warning",
-                "reason": "Market history appears stale (last bar >5 days old). Forecast uncertainty is elevated.",
-                "severity": "medium",
+                "should_abstain": True,
+                "status": "stale_data",
+                "reason": "The latest available market history is marked stale; a current forecast was withheld.",
+                "severity": "high",
+            }
+
+        if freshness != "FRESH":
+            return {
+                "should_abstain": True,
+                "status": "unknown_freshness",
+                "reason": "Market observation freshness could not be verified; a current forecast was withheld.",
+                "severity": "high",
+            }
+
+        if not val_metrics or not val_metrics.get("available") or len(val_metrics.get("residuals", [])) < 10:
+            return {
+                "should_abstain": True,
+                "status": "insufficient_validation",
+                "reason": "There are not enough valid out-of-sample residuals to support this forecast and its uncertainty interval.",
+                "severity": "high",
             }
 
         # 3. Model reliability check

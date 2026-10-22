@@ -89,7 +89,9 @@ class YFinanceProvider(MarketDataProvider):
                         pass
 
             market_session = "REGULAR_MARKET_OPEN" if is_market_open else "MARKET_CLOSED"
-            data_status = "REALTIME_QUOTE" if is_market_open else "OFFICIAL_CLOSE"
+            # Session hours describe the exchange clock, not the provider's
+            # latency or official status. Yahoo does not guarantee a live feed.
+            data_status = "PROVIDER_QUOTE" if is_market_open else "PROVIDER_CLOSE"
 
             return {
                 "success": True,

@@ -35,17 +35,17 @@ COPY run.py ./
 COPY entrypoint.sh ./
 
 # Prepare storage directories and assign ownership to non-root user
-RUN mkdir -p /app/data/faiss /app/data/documents /app/data/datasets /app/data/web /app/uploads && \
+RUN mkdir -p /app/data/faiss /app/data/documents /app/data/datasets /app/data/web /app/uploads /home/appuser/.cache/py-yfinance && \
     chmod +x /app/entrypoint.sh && \
-    chown -R appuser:appgroup /app
+    chown -R appuser:appgroup /app /home/appuser/.cache
 
 # Run as non-root user
 USER appuser
 
 EXPOSE 8000
 
-# Container healthcheck against verified FastAPI health endpoint
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health || exit 1
+# Container healthcheck requires the configured chat and embedding models to be usable.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=360s --retries=3 \
+    CMD curl -f http://localhost:8000/api/health/ready || exit 1
 
 ENTRYPOINT ["/app/entrypoint.sh"]

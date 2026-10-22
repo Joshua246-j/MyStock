@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>MyStock AI — Market Research Terminal</title>
-    <meta name="description" content="MyStock AI — Local-first market research terminal combining real-time market data, technical analytics, document RAG, and probabilistic ML forecasting.">
+    <meta name="description" content="MyStock AI — Local-first market research terminal combining provider-reported market data, technical analytics, document RAG, and probabilistic forecasting.">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
     <meta property="og:type" content="website">
     <meta property="og:title" content="MyStock AI — Market Research Terminal">
-    <meta property="og:description" content="Local-first market research terminal combining real-time data, technical analytics, document RAG, and probabilistic ML forecasting.">
+    <meta property="og:description" content="Local-first market research terminal combining provider-reported market data, technical analytics, document RAG, and probabilistic forecasting.">
     <!-- Production SVG Favicon -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230071e3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='22 12 18 12 15 21 9 3 6 12 2 12'/%3E%3C/svg%3E">
     <!-- Immediate theme initializer (avoids theme flash before CSS/JS load) -->
@@ -248,7 +248,7 @@
                                         Quantitative ML Forecasts
                                         <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Point-in-Time OOS</span>
                                     </h2>
-                                    <p class="text-[11px] text-apple-gray">Walk-forward return projections with calibrated conformal uncertainty bounds</p>
+                                    <p class="text-[11px] text-apple-gray">Walk-forward return estimates with residual-based uncertainty ranges</p>
                                 </div>
                             </div>
                             <!-- Horizon selector -->
@@ -393,7 +393,7 @@
                                 Load more stories
                             </button>
                         </div>
-                        <p id="news-feed-source" class="mt-3 text-center text-[10px] leading-relaxed text-apple-gray">Verified financial wire feeds with direct publisher source links.</p>
+                        <p id="news-feed-source" class="mt-3 text-center text-[10px] leading-relaxed text-apple-gray">Publisher-attributed financial headlines with source links and publication dates when supplied.</p>
                     </div>
 
                     <!-- Right Intelligence Rail: Consolidated into a single clean minimal panel -->
@@ -492,12 +492,12 @@
                                 <h3 class="text-lg font-semibold flex items-center gap-2">
                                     Price Performance
                                     <!-- Auto-Update Live Status Pill -->
-                                    <span id="chart-live-badge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title="Auto-updating real-time quote and candle feed">
+                                    <span id="chart-live-badge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title="Auto-refreshes provider-reported quotes and historical candles; delivery latency depends on the source.">
                                         <span class="relative flex h-2 w-2">
                                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                             <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                                         </span>
-                                        <span id="chart-live-status-text">LIVE (10s)</span>
+                                        <span id="chart-live-status-text">AUTO-REFRESH (10s)</span>
                                     </span>
                                 </h3>
                                 <p id="chart-update-timer-desc" class="text-xs text-apple-gray mt-0.5">Continuous auto-refresh · Next tick in <span id="chart-update-seconds" class="font-mono font-semibold text-emerald-600 dark:text-emerald-400">10</span>s</p>
@@ -508,7 +508,7 @@
                                 <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-black/[0.035] dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/[0.08] text-xs">
                                     <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-apple-gray" id="auto-update-spin-icon"></i>
                                     <select id="auto-update-cadence-select" onchange="changeAutoUpdateCadence(this.value)" class="bg-transparent border-0 text-xs font-semibold text-gray-800 dark:text-gray-200 cursor-pointer focus:outline-none pr-1" aria-label="Auto-update refresh interval">
-                                        <option value="10" selected>Live (10s)</option>
+                                        <option value="10" selected>Auto-refresh (10s)</option>
                                         <option value="30">Every 30s</option>
                                         <option value="60">Every 60s</option>
                                         <option value="0">Manual (Off)</option>
@@ -626,12 +626,12 @@
                                         <span id="forecast-engine-status-text">QUANT ENGINE READY</span>
                                     </span>
                                     <span id="forecast-hardware-summary" class="text-[11px] font-medium text-gray-700 dark:text-gray-300">Detecting Hardware &amp; CPU Path...</span>
-                                    <span id="forecast-freshness-pill" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20" title="Source: yfinance free tier · Verified monotonic timestamps">
+                                    <span id="forecast-freshness-pill" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20" title="Provider timestamps are checked; freshness is based on the latest observation date">
                                         <i data-lucide="check-circle" class="w-3 h-3"></i> <span id="forecast-freshness-text">DATA FRESH</span>
                                     </span>
                                     <span class="inline-flex items-center gap-1 text-[11px] font-mono text-apple-gray" title="Engine inference latency">
                                         <i data-lucide="zap" class="w-3 h-3 text-amber-500"></i>
-                                        <span id="forecast-engine-latency">12ms</span>
+                                        <span id="forecast-engine-latency">—</span>
                                     </span>
                                 </div>
                                 <div class="flex items-center gap-2 text-[11px]">
@@ -670,11 +670,11 @@
                                         </button>
                                     </div>
                                     <div id="forecast-confidence-wrap" class="hidden items-center gap-1.5">
-                                        <span class="text-xs font-semibold text-apple-gray">Band:</span>
+                                            <span class="text-xs font-semibold text-apple-gray">Range level:</span>
                                         <select id="forecast-confidence-select" onchange="runForecast()" class="text-xs h-9 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg px-2.5 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-apple-blue">
-                                            <option value="0.80">80% Conformal Band</option>
-                                            <option value="0.90" selected>90% Conformal Band</option>
-                                            <option value="0.95">95% Conformal Band</option>
+                                            <option value="0.80">80% Nominal Residual Range</option>
+                                            <option value="0.90" selected>90% Nominal Residual Range</option>
+                                            <option value="0.95">95% Nominal Residual Range</option>
                                         </select>
                                     </div>
                                 </div>
@@ -743,9 +743,9 @@
                                     <div class="text-xs font-medium text-apple-gray mt-1" id="forecast-direction-label">Direction: --</div>
                                 </div>
 
-                                <!-- Directional Probability -->
+                                <!-- Model-Implied Directional Score -->
                                 <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
-                                    <span class="text-[11px] font-semibold tracking-wider text-apple-gray uppercase block mb-1">Directional Probability</span>
+                                    <span class="text-[11px] font-semibold tracking-wider text-apple-gray uppercase block mb-1">Model-Implied Directional Score</span>
                                     <div class="text-2xl font-bold tracking-tight text-indigo-600 dark:text-indigo-400" id="forecast-prob-val">--</div>
                                     <div class="text-xs font-medium text-apple-gray mt-1" id="forecast-model-name">Model: --</div>
                                 </div>
@@ -769,11 +769,11 @@
                                             <h3 class="text-base font-bold tracking-tight">Probabilistic Trajectory &amp; Conformal Uncertainty Band</h3>
                                             <span id="forecast-chart-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase">Model Active</span>
                                         </div>
-                                        <p id="forecast-chart-caption" class="text-xs text-apple-gray mt-0.5">Historical price series leading to cutoff origin date, transitioning into projected trajectory with calibrated confidence interval cone.</p>
+                                        <p id="forecast-chart-caption" class="text-xs text-apple-gray mt-0.5">Historical prices leading to the observation cutoff, followed by an estimated trajectory and residual-based uncertainty range.</p>
                                     </div>
                                     <div class="flex items-center gap-4 text-xs font-medium">
                                         <span class="inline-flex items-center gap-1.5"><span class="w-3.5 h-0.5 bg-indigo-500 inline-block"></span> <span class="text-gray-700 dark:text-gray-300">Expected Path</span></span>
-                                        <span class="inline-flex items-center gap-1.5"><span class="w-3.5 h-2 bg-indigo-500/20 border border-dashed border-indigo-400 inline-block rounded-xs"></span> <span class="text-gray-700 dark:text-gray-300">Conformal Band</span></span>
+                                        <span class="inline-flex items-center gap-1.5"><span class="w-3.5 h-2 bg-indigo-500/20 border border-dashed border-indigo-400 inline-block rounded-xs"></span> <span class="text-gray-700 dark:text-gray-300">Residual Range</span></span>
                                     </div>
                                 </div>
                                 <div class="w-full h-[360px] min-h-[360px] relative rounded-2xl overflow-hidden bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.05]">
@@ -819,7 +819,7 @@
                                                 <span class="w-2 h-2 rounded-full inline-block bg-purple-500 mr-1"></span>Technical Pivot
                                             </button>
                                             <button type="button" class="series-toggle-pill active px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all" data-series="bands" onclick="toggleForecastSeries('bands')">
-                                                <span class="w-2 h-2 rounded-full inline-block bg-indigo-300 border border-dashed border-indigo-500 mr-1"></span>Conformal Band
+                                                <span class="w-2 h-2 rounded-full inline-block bg-indigo-300 border border-dashed border-indigo-500 mr-1"></span>Residual Range
                                             </button>
                                         </div>
                                     </div>
@@ -988,11 +988,11 @@
                                         <span id="forecast-nominal-interval-badge" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20" title="Selected nominal prediction interval band">
                                             80% Nominal Band
                                         </span>
-                                        <span id="forecast-empirical-coverage-badge" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title="Empirical holdout coverage rate observed during out-of-sample walk-forward backtests">
-                                            --% Holdout Coverage
+                                        <span id="forecast-empirical-coverage-badge" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title="Descriptive coverage measured on the same residual sample used to form the range">
+                                            Sample Coverage unavailable
                                         </span>
-                                        <span id="forecast-directional-prob-badge" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20" title="Statistical probability of positive forward return over selected horizon">
-                                            --% Bullish Probability
+                                        <span id="forecast-directional-prob-badge" class="px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20" title="Model-implied directional score; not calibrated as a probability">
+                                            Model-implied score unavailable
                                         </span>
                                     </div>
                                 </div>
@@ -1088,25 +1088,25 @@
                                                 <i data-lucide="lightbulb" class="w-3.5 h-3.5"></i>
                                             </span>
                                             <h4 class="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                                Quantitative Model Suggestion &amp; Actionable Tip
+                                                Forecast Summary
                                                 <span id="stock-suggestion-action" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white uppercase tracking-wider">
-                                                    Accumulate on Dips
+                                                    Estimate pending
                                                 </span>
                                             </h4>
                                         </div>
                                         <div class="text-[11px] text-apple-gray font-medium">
-                                            Risk/Reward: <span id="stock-suggestion-rr" class="font-bold text-gray-900 dark:text-gray-100">1 : 2.4</span>
+                                            Nominal interval level: <span id="stock-suggestion-rr" class="font-bold text-gray-900 dark:text-gray-100">--</span>
                                         </div>
                                     </div>
 
                                     <!-- Strategy Levels Grid -->
                                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                                         <div class="p-2.5 rounded-xl bg-white/70 dark:bg-black/30 border border-black/[0.05] dark:border-white/[0.06]">
-                                            <span class="text-[10px] uppercase font-bold text-apple-gray block">Accumulation Zone</span>
+                                            <span class="text-[10px] uppercase font-bold text-apple-gray block">Provider Current Price</span>
                                             <span id="stock-entry-zone" class="font-bold text-gray-900 dark:text-gray-100 font-mono text-sm">--</span>
                                         </div>
                                         <div class="p-2.5 rounded-xl bg-white/70 dark:bg-black/30 border border-black/[0.05] dark:border-white/[0.06]">
-                                            <span class="text-[10px] uppercase font-bold text-apple-gray block">Key Support</span>
+                                            <span class="text-[10px] uppercase font-bold text-apple-gray block">Observation Cutoff</span>
                                             <span id="stock-key-support" class="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-sm">--</span>
                                         </div>
                                         <div class="p-2.5 rounded-xl bg-white/70 dark:bg-black/30 border border-black/[0.05] dark:border-white/[0.06]">
@@ -1114,14 +1114,14 @@
                                             <span id="stock-model-target" class="font-bold text-indigo-600 dark:text-indigo-400 font-mono text-sm">--</span>
                                         </div>
                                         <div class="p-2.5 rounded-xl bg-white/70 dark:bg-black/30 border border-black/[0.05] dark:border-white/[0.06]">
-                                            <span class="text-[10px] uppercase font-bold text-apple-gray block">Suggested Stop (2x ATR)</span>
+                                            <span class="text-[10px] uppercase font-bold text-apple-gray block">Residual Range</span>
                                             <span id="stock-trailing-stop" class="font-bold text-rose-600 dark:text-rose-400 font-mono text-sm">--</span>
                                         </div>
                                     </div>
 
                                     <!-- Pro Tip Detailed Narrative -->
                                     <p id="stock-actionable-tip-text" class="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-normal">
-                                        Evaluating multi-model consensus and historical distribution...
+                                        Forecast values are unavailable until a validated result is returned.
                                     </p>
                                 </div>
                             </section>
@@ -1133,7 +1133,7 @@
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray flex items-center gap-1.5">
                                             <i data-lucide="globe" class="w-3.5 h-3.5 text-apple-blue"></i> Free 3rd-Party Consensus &amp; Quantitative Baselines
                                         </h4>
-                                        <p class="text-xs text-apple-gray mt-0.5">Cross-referenced against verified public external sources with explicit provenance and reliability labeling.</p>
+                                        <p class="text-xs text-apple-gray mt-0.5">Provider-attributed data and calculated baselines with visible source details.</p>
                                     </div>
                                     <span class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-black/5 dark:bg-white/5 text-apple-gray">Non-Fabricated Evidence</span>
                                 </div>
@@ -1144,13 +1144,13 @@
 
                             <!-- Modern Visual Analysis Hub: Directional Donut, Factor Allocation, Backtest History -->
                             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                                <!-- Directional Probability Donut Chart -->
+                                <!-- Model-Implied Directional Score Donut -->
                                 <div class="glass-panel p-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] flex flex-col justify-between">
                                     <div>
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-apple-gray mb-1 flex items-center gap-1.5">
-                                            <i data-lucide="pie-chart" class="w-3.5 h-3.5 text-indigo-500"></i> Directional Probability Distribution
+                                            <i data-lucide="pie-chart" class="w-3.5 h-3.5 text-indigo-500"></i> Model-Implied Directional Score
                                         </h4>
-                                        <p class="text-[11px] text-apple-gray">Empirical probability of positive forward return</p>
+                                        <p class="text-[11px] text-apple-gray">Illustrative model score; not calibrated as a probability</p>
                                     </div>
                                     <div class="my-3 flex items-center justify-center">
                                         <div class="relative w-32 h-32 flex items-center justify-center" id="directional-donut-container">
@@ -1686,9 +1686,9 @@
                     <div class="pr-2">
                         <span class="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5 text-xs">
                             <i data-lucide="globe" class="w-3.5 h-3.5 text-blue-500"></i>
-                            Live Web Research
+                            Web Research
                         </span>
-                        <p class="text-[10px] text-apple-gray mt-0.5">Crawl Google News RSS &amp; live financial web pages for fresh real-time facts</p>
+                        <p class="text-[10px] text-apple-gray mt-0.5">Search current web results and publisher feeds on request; source publication and retrieval times are shown when available.</p>
                     </div>
                     <button type="button" id="panel-web-crawl-toggle" onclick="toggleWebCrawl()" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 active:scale-95 cursor-pointer">
                         ON
@@ -1904,7 +1904,7 @@
             <div id="model-info-availability-banner" class="p-3.5 rounded-2xl border text-xs leading-relaxed flex items-center justify-between gap-3 bg-emerald-500/10 border-emerald-500/20 text-emerald-900 dark:text-emerald-200">
                 <div class="flex items-center gap-2">
                     <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0"></i>
-                    <span id="model-info-avail-text" class="font-semibold">Model Status: Ready (Calibrated &amp; Verified)</span>
+                    <span id="model-info-avail-text" class="font-semibold">Model execution status is not checked</span>
                 </div>
                 <span id="model-info-hw-profile" class="text-[11px] text-apple-gray font-mono">Pure CPU · &lt;1ms Latency</span>
             </div>
@@ -1973,9 +1973,9 @@
                     <div>
                         <div class="flex items-center gap-2">
                             <h3 id="system-health-title" class="text-base font-bold tracking-tight">System Health &amp; Diagnostic Hub</h3>
-                            <span id="system-health-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase">All Systems Verified</span>
+                            <span id="system-health-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 uppercase">Checking</span>
                         </div>
-                        <p class="text-xs text-apple-gray mt-0.5">Real-time hardware profiler, provider connectivity, and model availability registry</p>
+                        <p class="text-xs text-apple-gray mt-0.5">Hardware measurements, provider connectivity checks, and model availability status</p>
                     </div>
                 </div>
                 <button type="button" onclick="closeSystemHealthModal()" class="p-1.5 rounded-xl text-apple-gray hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition" aria-label="Close modal">
@@ -2007,8 +2007,8 @@
                 </div>
                 <div class="p-3 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.06]">
                     <span class="text-apple-gray block text-[10px] uppercase font-bold">Engine Status</span>
-                    <span id="health-engine-metric" class="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block">ONLINE</span>
-                    <span id="health-engine-sub" class="text-[10px] text-apple-gray">Zero Degradation</span>
+                    <span id="health-engine-metric" class="text-sm font-bold text-amber-600 dark:text-amber-400 mt-0.5 block">CHECKING</span>
+                    <span id="health-engine-sub" class="text-[10px] text-apple-gray">Waiting for dependency checks</span>
                     <span id="hw-dep-status" class="hidden"></span>
                 </div>
             </div>
@@ -2021,15 +2021,15 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]" id="health-providers-list">
                     <div class="p-2.5 rounded-xl bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
                         <span>Market Data Feed (yfinance)</span>
-                        <span class="px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Connected</span>
+                        <span class="px-2 py-0.5 rounded font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400">Checking</span>
                     </div>
                     <div class="p-2.5 rounded-xl bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
                         <span>Financial News Feeds (RSS)</span>
-                        <span class="px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Connected</span>
+                        <span class="px-2 py-0.5 rounded font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400">Not checked</span>
                     </div>
                     <div class="p-2.5 rounded-xl bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
                         <span>Analyst Consensus Feed</span>
-                        <span class="px-2 py-0.5 rounded font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Available</span>
+                        <span class="px-2 py-0.5 rounded font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400">Not configured</span>
                     </div>
                     <div class="p-2.5 rounded-xl bg-black/[0.015] dark:bg-white/[0.015] border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
                         <span>SQLite Forecast Audit Log</span>
@@ -2051,7 +2051,7 @@
                                 <th class="py-2 px-3 font-semibold">Type</th>
                                 <th class="py-2 px-3 font-semibold">Latency / Footprint</th>
                                 <th class="py-2 px-3 font-semibold">Availability</th>
-                                <th class="py-2 px-3 font-semibold text-right">Last Verified</th>
+                                <th class="py-2 px-3 font-semibold text-right">Last Execution</th>
                             </tr>
                         </thead>
                         <tbody id="health-models-list" class="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
@@ -2061,14 +2061,14 @@
                 </div>
             </div>
 
-            <!-- Real-Time Diagnostic Advice / Revalidation Feedback -->
+            <!-- Diagnostic advice and revalidation feedback -->
             <p id="health-diagnostics-msg" class="text-xs text-apple-gray leading-relaxed bg-black/[0.02] dark:bg-white/[0.02] p-3 rounded-xl border border-black/[0.04] dark:border-white/[0.04]">
-                All forecasting services operational. No stuck or stalled processes detected.
+                Waiting for measured dependency checks. Availability and data freshness are reported separately.
             </p>
 
             <div class="pt-2 flex items-center justify-between">
                 <button type="button" onclick="triggerSystemRevalidate()" id="system-revalidate-btn" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 active:scale-95 transition flex items-center gap-1.5">
-                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Revalidate &amp; Clear Stale Cache
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Clear Forecast Cache &amp; Refresh Hardware
                 </button>
                 <button type="button" onclick="closeSystemHealthModal()" class="px-5 py-2 rounded-xl text-xs font-semibold bg-black dark:bg-white text-white dark:text-black hover:opacity-90 transition">
                     Close

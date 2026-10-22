@@ -142,7 +142,7 @@ def get_news_feed(symbols: list[str], market: str = "all", limit: int = 80, days
                                 "published_at": item.get("published_at"), "ticker": None,
                                 "related_tickers": [],
                                 "market": tm, "feed_source": "Google News Business Topic",
-                                "summary_type": "breaking topic headline",
+                                "summary_type": "publisher headline",
                             })
                     except Exception:
                         pass
@@ -231,12 +231,14 @@ def get_news_feed(symbols: list[str], market: str = "all", limit: int = 80, days
     ordered = sorted(deduped.values(), key=lambda item: _parse_published(item.get("published_at")) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     now_iso = now.isoformat()
     page = ordered[:max(1, min(int(limit), 100))]
+    for item in page:
+        item["publication_date_status"] = "known" if _parse_published(item.get("published_at")) else "unknown"
     publishers = sorted({item.get("publisher") for item in page if item.get("publisher")})
     return {
         "success": bool(page), "news": page, "total_available": len(ordered),
         "has_more": len(ordered) > len(page), "source_count": len(publishers),
         "publishers": publishers, "retrieved_at": now_iso,
-        "data_status": "LIVE_SEARCH" if page else "UNAVAILABLE",
+        "data_status": "PROVIDER_SEARCH" if page else "UNAVAILABLE",
         "errors": errors,
         "error": None if page else "No recent headlines were returned by the configured publishers.",
     }

@@ -43,7 +43,7 @@ class PromptBuilder:
                     "Directives: Structure your analysis with institutional-grade Markdown: "
                     "### Market Snapshot (current price, session change, day's range, timestamp from MARKET QUOTE), "
                     "### Technical Trend & Momentum (RSI, moving averages, MACD, volatility), "
-                    "### Probabilistic Forecast & Multi-Model Outlook (expected return, target price cone, calibrated confidence interval, directional tilt, and multi-model consensus), "
+                    "### Probabilistic Forecast & Multi-Model Outlook (estimated return, residual-based uncertainty interval, model-implied directional score, and available validation evidence), "
                     "### Catalysts & Market Evidence (high-signal bullet points citing publishers in parentheses e.g. (Reuters)), "
                     "### Strategic Takeaways & Risks (support/resistance, key catalysts, and risk factors). "
                     "Current stock price must be taken directly from the verified MARKET QUOTE section. Never output raw URLs or search feed tokens."

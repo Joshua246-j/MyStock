@@ -36,10 +36,9 @@
   - Classifies disagreement into 4 distinct regimes (`LOW_DISAGREEMENT`, `MODERATE_DISAGREEMENT`, `HIGH_DISAGREEMENT`, `EXTREME_DISPERSION`).
   - Automatically identifies statistical prediction outliers via Median Absolute Deviation (MAD) and Interquartile Range (IQR).
   - Produces honest, non-smoothed dependability verdicts with actionable narratives when models diverge.
-- **Calibrated Conformal Uncertainty & Empirical Coverage**:
-  - Non-parametric empirical residual quantile intervals (80%, 90%, 95% nominal confidence cones).
-  - Explicit holdout empirical coverage tracking (`empirical_coverage_percent`, `nominal_confidence_percent`, and calibration verdict) to ensure nominal bands actually match observed error distributions without false confidence claims.
-  - Distinct separation of nominal prediction intervals, empirical coverage, model performance, and directional tilt.
+- **Residual-Based Uncertainty & Descriptive Coverage**:
+  - Residual quantile ranges (80%, 90%, 95% nominal levels); interval coverage is descriptive because the same residual sample forms and assesses the range.
+  - Distinct separation of nominal residual ranges, same-sample coverage, walk-forward model performance, and the uncalibrated model-implied directional score.
 - **Honest Chronological Model Selection & Benchmark Truthfulness**:
   - Strictly identifies `Selected (Min OOS MAE)` using genuine out-of-sample holdout backtesting across purged embargo windows.
   - Distinguishes optimal quantitative models from user manual overrides (`Active Selection (User)` vs `Optimal (Min OOS MAE)`).
@@ -55,8 +54,8 @@
 
 ### 3. 📊 Interactive Visual Hub & Charts
 - **TradingView Lightweight Charts Integration**: Smooth candlestick and line series with customizable periods (1D, 5D, 1M, 3M, 6M, 1Y, 5Y).
-- **Multi-Series Forecast Trajectory Toggles**: Toggle expected model trajectories, conformal bands, Ridge, Random Forest, Neural Net, Analyst consensus, and technical pivot lines simultaneously.
-- **Directional Probability Donut Chart**: Inline SVG visualizer with smooth animations, calibrated percentages, and a dual Bullish/Bearish balance bar.
+- **Multi-Series Forecast Trajectory Toggles**: Toggle expected model trajectories, residual ranges, Ridge, Random Forest, Neural Net, Analyst consensus, and technical pivot lines simultaneously.
+- **Directional Score Donut Chart**: Inline SVG visualizer with smooth animations and a model-implied directional score; it is not a calibrated probability.
 - **Multi-Model Target Comparison Grid**: Side-by-side card grid comparing expected price targets and implied returns across all 8 models.
 - **Realized Outcome Tracking (Audit Trail)**: Persisted historical forecasts compared against observed market closes with verifiable prediction accuracy.
 
@@ -219,7 +218,7 @@ The interactive OpenAPI documentation and Swagger schema are accessible live at 
 ### Forecaster Endpoints (`/api/forecast`)
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/forecast/{symbol}?horizon=5&model=auto&confidence=0.80` | Generate validated probabilistic forecast with conformal bands and multi-model projections. |
+| `GET` | `/api/forecast/{symbol}?horizon=5&model=auto&confidence=0.80` | Generate a forecast with a residual-based range, validation metrics, and multi-model projections. |
 | `GET` | `/api/forecast/system/health` | Retrieve dynamic host hardware profiling, CPU cores, RAM, and model availability. |
 | `POST` | `/api/forecast/system/revalidate` | Purge cached forecasts and force re-execution of hardware diagnostics. |
 | `GET` | `/api/forecast/models/catalog` | Complete metadata, mathematical formulations, strengths, and assumptions for all models. |
@@ -229,11 +228,11 @@ The interactive OpenAPI documentation and Swagger schema are accessible live at 
 ### Market Intelligence Endpoints (`/api/stocks`)
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/stocks/{symbol}/quote` | Point-in-time verified quote data with provenance labeling. |
+| `GET` | `/api/stocks/{symbol}/quote` | Provider quote with source, market-time, and freshness status where supplied. |
 | `GET` | `/api/stocks/{symbol}/history` | Cleaned, deduplicated OHLCV historical session bars. |
 | `GET` | `/api/stocks/{symbol}/technical` | Python-computed RSI, MACD, Moving Averages, and ATR bands. |
 | `GET` | `/api/stocks/{symbol}/fundamentals` | Structured balance sheet, margins, and valuation ratios. |
-| `GET` | `/api/stocks/{symbol}/news` | Verified publisher RSS news articles with zero lookahead bias. |
+| `GET` | `/api/stocks/{symbol}/news` | Publisher-attributed news articles with publication-time filtering when dates are supplied. |
 
 ### Local RAG & Chat Endpoints (`/api/chat`, `/api/documents`)
 | Method | Endpoint | Description |
@@ -251,25 +250,17 @@ MyStock AI Terminal supports full containerized execution via Docker, Docker Com
 
 **Official Docker Hub Image:** [`joshuajomon246/stockterminal:latest`](https://hub.docker.com/repository/docker/joshuajomon246/stockterminal/general)
 
-### Run Anywhere with Docker (Official Hub Image)
-```bash
-# Pull and run the official pre-built image
-docker pull joshuajomon246/stockterminal:latest
-docker run -d -p 8000:8000 --name stockterminal joshuajomon246/stockterminal:latest
-```
-
-### Docker Compose (Multi-Service with Ollama)
+### Run the complete application with Docker Compose
 
 ```bash
-# Build / pull and start backend API and Ollama services
+# Start Ollama, pull the configured chat and embedding models, then start the API
 docker compose up -d
-
-# Push new builds to Docker Hub
-docker compose push api
 
 # Verify deployment health
 python scripts/verify_deployment.py --url http://localhost:8000
 ```
+
+The API is bound to `127.0.0.1:8000` by default. Docker Compose keeps application data and model files in named volumes; `docker compose down` preserves them. The Ollama model pull runs on first startup and the API waits for it before becoming ready. For a trusted LAN, set `BIND_ADDRESS=0.0.0.0`, `AUTH_ENABLED=true`, and unique `AUTH_USERNAME` / `AUTH_PASSWORD` values in `.env` before starting. Never expose Ollama's port publicly. A registry push requires Docker Hub credentials and should be performed by the configured GitHub Actions workflow.
 
 ### Kubernetes (Minikube)
 

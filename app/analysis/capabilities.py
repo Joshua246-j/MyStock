@@ -6,9 +6,9 @@ from typing import Any
 
 APPLICATION_CAPABILITIES: dict[str, dict[str, Any]] = {
     "market_data": {
-        "title": "Real-time & Historical Market Data",
+        "title": "Provider & Historical Market Data",
         "endpoints": ["/api/stocks/{symbol}", "/api/stocks/{symbol}/financials"],
-        "description": "Live and historical OHLCV pricing, multi-timeframe candle data, trading session stats, volume, and fundamental metrics.",
+        "description": "Provider-reported and historical OHLCV pricing, multi-timeframe candle data, exchange session status, volume, and fundamental metrics. Quote delivery latency depends on the provider.",
         "supported_exchanges": ["US (NYSE, NASDAQ)", "India (NSE, BSE)", "UK (LSE)", "Canada (TSX)", "Australia (ASX)"],
         "timeframes": ["1mo", "3mo", "6mo", "1y", "2y", "5y"],
         "intervals": ["1d", "1wk", "1mo"],
@@ -42,7 +42,7 @@ APPLICATION_CAPABILITIES: dict[str, dict[str, Any]] = {
     "news_intelligence": {
         "title": "Financial News Intelligence & Feed",
         "endpoints": ["/api/news/feed", "/api/news/{symbol}"],
-        "description": "Real-time streaming headlines and news articles from Google News RSS feeds with ticker extraction, deduplication, and sentiment analysis.",
+        "description": "Publisher headlines fetched from Google News RSS feeds with ticker extraction, deduplication, and sentiment analysis. Publication time is shown when supplied; feed delivery may be delayed.",
         "features": ["Regional business feeds (US & India)", "Publisher attribution and direct links", "Article summaries", "Ticker tag linking"],
     },
     "document_rag": {
@@ -54,9 +54,9 @@ APPLICATION_CAPABILITIES: dict[str, dict[str, Any]] = {
         "search_modes": ["Hybrid (vector + keyword)", "Semantic (FAISS)", "Keyword (SQLite BM25)", "Ticker metadata scoped"],
     },
     "web_research": {
-        "title": "Live Web Research & Crawling",
+        "title": "Web Research & Crawling",
         "endpoints": ["Integrated into /api/chat"],
-        "description": "Real-time web research engine combining DuckDuckGo multi-source search and Google News RSS, with SSRF-protected webpage extraction, robots.txt compliance, and automatic source citation.",
+        "description": "On-demand web research combining DuckDuckGo multi-source search and Google News RSS, with SSRF-protected webpage extraction, robots.txt compliance, and automatic source citation.",
         "capabilities": ["Multi-source search", "Publisher metadata extraction", "Clean DOM text extraction without ads/scripts", "Inline source citation and structured source cards"],
     },
     "conversation_and_memory": {

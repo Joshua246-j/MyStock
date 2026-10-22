@@ -32,7 +32,7 @@ class BaseForecaster(abc.ABC):
         pass
 
     def predict_proba(self, X: np.ndarray, residual_std: float | None = None) -> np.ndarray:
-        """Predict probability of positive forward return (calibrated directional probability).
+        """Return a model-implied directional score, not a calibrated probability.
         
         Uses standard normal CDF on z-score = pred / max(residual_std, 0.015),
         bounded conservatively within [0.15, 0.85] to reflect financial market uncertainty.

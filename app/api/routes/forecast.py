@@ -38,9 +38,12 @@ def _resolve_or_400(symbol: str) -> str:
 
 @router.get("/system/health")
 async def get_system_health() -> dict[str, Any]:
-    """Return genuine, dynamic hardware specifications, system memory, and service status."""
+    """Return measured hardware and dependency status without asserting unprobed services."""
     hw = await asyncio.to_thread(get_hardware_profile)
     from app.forecasting.service import MODEL_METADATA
+    from app.api.routes.health import health_check
+
+    runtime = await health_check()
 
     cpu_logical = hw.get("cpu", {}).get("logical_cores", 1)
     cpu_physical = hw.get("cpu", {}).get("physical_cores", cpu_logical)
@@ -61,9 +64,13 @@ async def get_system_health() -> dict[str, Any]:
     }
 
     diagnostics = {
-        "healthy": hw.get("health_state") == "HEALTHY",
-        "engine_status": "ONLINE",
-        "recommendation": "All forecasting services operational. No stuck or stalled processes detected.",
+        "healthy": runtime.get("ready") is True and hw.get("health_state") == "HEALTHY",
+        "engine_status": "READY" if runtime.get("ready") else "DEGRADED",
+        "recommendation": (
+            "Configured chatbot, embedding model, and database checks passed."
+            if runtime.get("ready") else
+            "One or more configured chatbot, embedding, or database dependencies failed their check."
+        ),
     }
 
     data_providers = {
@@ -71,28 +78,29 @@ async def get_system_health() -> dict[str, Any]:
             "name": "Yahoo Finance Free Tier",
             "category": "Market OHLCV",
             "coverage": "Global Equities & Indices",
-            "status": "Connected",
-            "freshness_policy": "Near Real-Time / EOD",
+            "status": "Probe succeeded" if runtime.get("market_data", {}).get("status") == "available" else "Unavailable",
+            "data_status": runtime.get("market_data", {}).get("data_status", "UNAVAILABLE"),
+            "freshness_policy": "Provider updates during market sessions or end-of-day; delivery latency depends on the provider",
         },
         "news": {
             "name": "Financial News Feeds",
             "category": "Corporate Headlines",
             "coverage": "Global Financial Media (RSS)",
-            "status": "Connected",
-            "freshness_policy": "Hourly Poll",
+            "status": "Not checked",
+            "freshness_policy": "Checked when the news feed is requested",
         },
         "consensus": {
             "name": "Analyst Targets & Consensus",
             "category": "Wall Street Estimates",
             "coverage": "Major Large-Caps",
-            "status": "Available",
-            "freshness_policy": "Weekly",
+            "status": "Not configured",
+            "freshness_policy": "No analyst-consensus provider configured",
         },
         "sqlite": {
             "name": "SQLite Forecast Audit Log",
             "category": "Audit Trail & Verification",
             "coverage": "Local WAL Storage",
-            "status": "Connected",
+            "status": "Available" if runtime.get("database") == "available" else "Unavailable",
             "freshness_policy": "Immediate Commit",
         },
     }
@@ -103,8 +111,8 @@ async def get_system_health() -> dict[str, Any]:
             "name": meta.get("name", m_id),
             "model_type": meta.get("category", "Quantitative Model"),
             "hardware_requirements": meta.get("hardware_profile", "Pure CPU · SIMD"),
-            "availability": "Ready",
-            "last_successful_execution": "Verified Out-of-Sample",
+            "availability": "Implemented (execution not probed)",
+            "last_successful_execution": "Not tracked",
         }
 
     return {
@@ -115,10 +123,12 @@ async def get_system_health() -> dict[str, Any]:
         "data_providers": data_providers,
         "model_registry": model_registry_formatted,
         "services": {
-            "market_data_api": "Operational (yfinance / Market Service)",
-            "news_feed_api": "Operational (Google News / RSS Feeds)",
-            "analyst_consensus_api": "Operational (Yahoo Public Feed)",
-            "database_persistence": "Operational (SQLite / ForecastRecord)",
+            "chat_model": "available" if runtime.get("model_available") else "unavailable",
+            "embedding_model": "available" if runtime.get("embedding_model_available") else "unavailable",
+            "market_data_api": runtime.get("market_data", {}).get("status", "unavailable"),
+            "news_feed_api": "Not checked by this diagnostic",
+            "analyst_consensus_api": "Not configured",
+            "database_persistence": runtime.get("database", "unavailable"),
         },
     }
 
@@ -130,7 +140,7 @@ async def revalidate_system() -> dict[str, Any]:
     hw = await asyncio.to_thread(get_hardware_profile)
     return {
         "success": True,
-        "message": f"Successfully cleared {cleared} cached forecast entries and revalidated diagnostics.",
+        "message": f"Cleared {cleared} cached forecasts and refreshed hardware measurements. Provider availability was not rechecked.",
         "hardware": hw,
     }
 
@@ -284,7 +294,7 @@ async def get_stock_forecast(
     confidence: float = Query(0.80, description="Nominal confidence interval level (0.80, 0.90, or 0.95)"),
     refresh: bool = Query(False, description="Bypass cache and pull fresh data"),
 ) -> dict[str, Any]:
-    """Generate an evidence-grounded, probabilistic stock forecast with calibrated prediction intervals."""
+    """Generate an evidence-grounded stock forecast with residual-based uncertainty ranges."""
     resolved_symbol = _resolve_or_400(symbol)
     if horizon not in (1, 5, 20):
         raise HTTPException(status_code=400, detail="Horizon must be 1, 5, or 20 trading sessions.")

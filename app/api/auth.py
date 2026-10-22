@@ -15,9 +15,13 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
             
         auth_header = request.headers.get("Authorization")
-        # Default to admin/admin if not configured in environment
-        expected_user = os.getenv("AUTH_USERNAME", "admin")
-        expected_pass = os.getenv("AUTH_PASSWORD", "admin")
+        expected_user = os.getenv("AUTH_USERNAME", "").strip()
+        expected_pass = os.getenv("AUTH_PASSWORD", "")
+        if not expected_user or not expected_pass:
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Authentication is enabled but credentials are not configured."},
+            )
         
         if auth_header and auth_header.startswith("Basic "):
             try:

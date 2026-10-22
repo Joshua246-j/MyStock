@@ -306,3 +306,20 @@ def test_quote_refresh_bypasses_market_cache():
     assert result["price"] == 11
     assert result["status"] == "UNVERIFIED_FRESHNESS"
     assert provider.calls == 1
+
+
+def test_cached_quote_does_not_claim_provider_status_is_current():
+    from app.market.service import MarketDataService
+
+    class Cache:
+        def get(self, _key):
+            return {"success": True, "price": 10, "data_status": "REALTIME_QUOTE"}
+        def set(self, *_args, **_kwargs): pass
+        def delete(self, *_args): pass
+
+    service = MarketDataService(cache=Cache(), fallback_providers=[], settings_provider=lambda: {"cache_ttl": 30})
+    result = service.get_quote("AAPL")
+
+    assert result["status"] == "CACHED"
+    assert result["data_status"] == "CACHED"
+    assert result["provider_data_status"] == "REALTIME_QUOTE"

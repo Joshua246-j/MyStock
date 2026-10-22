@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query
 
@@ -20,7 +21,17 @@ async def get_feed(
         from app.db.cache import get_cache, set_cache
         cached = await asyncio.to_thread(get_cache, cache_key)
         if cached and isinstance(cached, dict) and cached.get("success"):
-            return cached
+            response = dict(cached)
+            response["data_status"] = "CACHED"
+            response["cache_status"] = "HIT"
+            try:
+                retrieved_at = datetime.fromisoformat(str(cached.get("retrieved_at", "")).replace("Z", "+00:00"))
+                if retrieved_at.tzinfo is None:
+                    retrieved_at = retrieved_at.replace(tzinfo=timezone.utc)
+                response["cache_age_seconds"] = max(0, int((datetime.now(timezone.utc) - retrieved_at).total_seconds()))
+            except (TypeError, ValueError):
+                response["cache_age_seconds"] = None
+            return response
     except Exception:
         pass
 
@@ -31,6 +42,7 @@ async def get_feed(
             timeout=45,
         )
         if feed and feed.get("success"):
+            feed["cache_status"] = "REFRESHED"
             try:
                 await asyncio.to_thread(set_cache, cache_key, feed, ttl_seconds=180, source="news_feed")
             except Exception:

@@ -25,28 +25,41 @@ logger = logging.getLogger("stockrag")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     async def warm_local_model():
+        health.set_chat_model_warming(True)
         try:
-            def load_model_name():
+            def load_model_settings():
                 from app.db.database import SessionLocal
                 from app.db.models import UserSettings
                 with SessionLocal() as db:
                     row = db.query(UserSettings).first()
-                    return (row.settings or {}).get("ai_model", OLLAMA_MODEL) if row else OLLAMA_MODEL
-            model = await asyncio.to_thread(load_model_name)
+                    values = row.settings or {} if row else {}
+                    return values.get("ai_model", OLLAMA_MODEL), int(values.get("context_size", 4096))
+            model, context_size = await asyncio.to_thread(load_model_settings)
             if not await ollama_client.has_model(model, timeout=4):
+                health.set_chat_model_warming(False)
+                health.set_warmed_chat_model(None)
                 logger.info("ollama_warmup_skipped", extra={"model": model, "reason": "model unavailable"})
                 return
             await ollama_client.chat(
                 [{"role":"system","content":"Respond with one short readiness word."},{"role":"user","content":"Ready"}],
                 model,
-                timeout=45,
-                context_size=512,
+                # Cold CPU-only model loading can exceed 150 seconds on this
+                # hardware profile; allow a bounded load before aborting it.
+                timeout=300,
+                # Warm with the same context size regular chat uses so Ollama
+                # does not need to reload the model when the first user arrives.
+                context_size=context_size,
                 max_output_tokens=8,
             )
+            health.set_warmed_chat_model(model)
+            health.set_chat_model_warming(False)
             logger.info("ollama_model_warmed", extra={"model": model})
         except asyncio.CancelledError:
+            health.set_chat_model_warming(False)
             raise
         except Exception as exc:
+            health.set_warmed_chat_model(None)
+            health.set_chat_model_warming(False)
             logger.info("ollama_warmup_failed", extra={"reason": str(exc)})
 
     warmup_task = asyncio.create_task(warm_local_model())

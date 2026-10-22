@@ -77,18 +77,24 @@ class ForecastDataAdapter:
         last_bar_at = history_result.get("last_bar_at") or (
             str(clean_df["Date"].iloc[-1]) if "Date" in clean_df.columns else None
         )
-        retrieved_at = history_result.get("retrieved_at") or datetime.now(timezone.utc).isoformat()
+        # Do not invent a provider retrieval time when it was not returned.
+        retrieved_at = history_result.get("retrieved_at") or history_result.get("timestamp")
 
         # Compute data freshness
-        freshness_status = "FRESH"
+        source_status = str(history_result.get("data_status") or history_result.get("status") or "").upper()
+        freshness_status = "STALE" if source_status in {"STALE", "OFFLINE", "OFFLINE_FALLBACK", "UNAVAILABLE"} else "UNKNOWN"
         if last_bar_at:
             try:
                 last_dt = datetime.fromisoformat(str(last_bar_at).replace("Z", "+00:00"))
                 if last_dt.tzinfo is None:
                     last_dt = last_dt.replace(tzinfo=timezone.utc)
                 age_days = (datetime.now(timezone.utc) - last_dt).total_seconds() / 86400.0
-                if age_days > 5.0:
+                if age_days < -1.0:
+                    freshness_status = "UNKNOWN"
+                elif age_days > 5.0:
                     freshness_status = "STALE"
+                elif freshness_status != "STALE":
+                    freshness_status = "FRESH"
             except Exception:
                 freshness_status = "UNKNOWN"
 

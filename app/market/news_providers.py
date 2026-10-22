@@ -177,7 +177,7 @@ GLOBAL_FEED_SOURCES = [
         "publisher_url": "https://www.marketwatch.com",
     },
     {
-        "name": "MarketWatch Real-time",
+        "name": "MarketWatch Headlines",
         "publisher": "MarketWatch",
         "url": "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines",
         "market": "us",
@@ -379,7 +379,7 @@ def parse_rss_feed(content: bytes | str, feed_meta: dict[str, Any]) -> list[dict
                     "related_tickers": detected_tickers,
                     "market": feed_meta.get("market", "us"),
                     "feed_source": feed_meta.get("name", "Direct RSS"),
-                    "summary_type": "breaking topic headline",
+                    "summary_type": "publisher headline",
                 })
             return results
         except Exception:
@@ -438,7 +438,7 @@ def parse_rss_feed(content: bytes | str, feed_meta: dict[str, Any]) -> list[dict
             "related_tickers": detected_tickers,
             "market": feed_meta.get("market", "us"),
             "feed_source": feed_meta.get("name", "Direct RSS"),
-            "summary_type": "breaking topic headline",
+            "summary_type": "publisher headline",
         })
 
     return results
@@ -490,10 +490,10 @@ def fetch_all_provider_feeds(market: str = "all", max_workers: int = 8, timeout:
 
 
 def fetch_ticker_targeted_news(symbol: str, limit: int = 25, timeout: float = 6.0) -> list[dict[str, Any]]:
-    """Fetch real-time company-targeted news via Google News RSS and direct financial queries.
+    """Fetch company-targeted publisher headlines via Google News RSS and direct financial queries.
 
     Ensures that Indian stocks (e.g. HDFCBANK.NS, RELIANCE.NS, TCS.NS) and Global stocks
-    always have fresh, attributed news articles even when secondary providers return empty.
+    always have attributed news items when providers return them; feed publication and delivery can be delayed.
     """
     from urllib.parse import quote_plus
     from app.market.symbol_resolver import resolve_symbol

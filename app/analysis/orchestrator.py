@@ -18,7 +18,7 @@ logger = logging.getLogger("stockrag.orchestrator")
 ollama_client = OllamaClient()
 URL_RE = re.compile(r"https?://[^\s<>]+", re.IGNORECASE)
 _FACT_STOPWORDS = {"what", "which", "when", "where", "does", "did", "was", "were", "the", "for", "from", "this", "that", "with", "about", "according", "uploaded", "document", "pdf", "tell", "show", "give", "report", "reported"}
-_FACT_VALUE_RE = re.compile(r"(?<![A-Za-z0-9])(?:[$₹€£]\s*)?\d[\d,]*(?:\.\d+)?(?:\s*(?:million|billion|crore|lakh|thousand|percent|rupees|INR|USD|%))?", re.IGNORECASE)
+_FACT_VALUE_RE = re.compile(r"(?<![A-Za-z0-9.])(?:[$₹€£]\s*)?\d[\d,]*(?:\.\d+)?(?:\s*(?:million|billion|crore|lakh|thousand|percent|rupees|INR|USD|%))?", re.IGNORECASE)
 _NUMERIC_METRIC_GROUPS = (
     {"revenue", "sales", "turnover"},
     {"income", "profit", "earnings"},
@@ -138,12 +138,24 @@ def _document_numeric_fact(query: str, passages: list[dict[str, str]]) -> dict[s
     """Find the best matching source sentence containing a precise numeric fact."""
     query_terms = {term for term in re.findall(r"[a-z0-9]+", query.casefold()) if len(term) > 2 and term not in _FACT_STOPWORDS}
     requested_metrics = [group for group in _NUMERIC_METRIC_GROUPS if query_terms & group]
+    amount_metrics = {"revenue", "sales", "turnover", "income", "profit", "earnings", "eps", "debt", "borrowings", "cash", "assets", "liabilities", "dividend", "dividends"}
+    amount_requested = any(group & amount_metrics for group in requested_metrics)
     candidates = []
     for passage in passages:
         for sentence in re.split(r"(?<=[.!?])\s+|\n+", passage.get("content", "")):
             values = [match.group(0).strip() for match in _FACT_VALUE_RE.finditer(sentence)]
             if not values:
                 continue
+            if amount_requested:
+                # Never turn an OCR/text-extraction fragment such as ".5 billion"
+                # or an unrelated percentage into a reported financial amount.
+                if re.search(r"(?<!\d)\.\d+\s*(?:million|billion|crore|lakh|thousand)\b", sentence, re.IGNORECASE):
+                    continue
+                if not any(
+                    re.match(r"^(?:[$₹€£]\s*\d|\d[\d,]*(?:\.\d+)?\s*(?:million|billion|crore|lakh|thousand|rupees|INR|USD)\b)", value, re.IGNORECASE)
+                    for value in values
+                ):
+                    continue
             sentence_terms = set(re.findall(r"[a-z0-9]+", sentence.casefold()))
             if requested_metrics and not all(sentence_terms & group for group in requested_metrics):
                 continue
@@ -446,7 +458,10 @@ async def orchestrate_chat(
         if mode == "market" and symbol and not (intents & {"market_quote", "technical", "fundamental", "news"}):
             intents.add("market_quote")
         elif mode == "documents":
-            intents.difference_update({"market_quote", "technical", "fundamental", "news"})
+            # A document-scoped request must stay grounded in the selected
+            # corpus. Generic words such as "sources" in a citation request
+            # must not fan out to live web search or add unrelated evidence.
+            intents.difference_update({"market_quote", "technical", "fundamental", "news", "web_research"})
         elif mode == "general":
             has_url = bool(URL_RE.findall(message))
             if has_url or web_crawl:

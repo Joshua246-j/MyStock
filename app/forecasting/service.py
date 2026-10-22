@@ -225,6 +225,14 @@ class ForecastingService:
         horizon = int(horizon) if int(horizon) in (1, 5, 20) else 5
         confidence = float(confidence) if confidence in (0.80, 0.90, 0.95) else 0.80
         model_name = (model_name or "historical_drift").casefold()
+        if model_name != "auto" and model_name not in MODEL_METADATA:
+            return {
+                "success": False,
+                "status": "invalid_model",
+                "symbol": (dataset_name or symbol or "CUSTOM").upper(),
+                "error": f"Unsupported forecasting model: {model_name}",
+                "abstain": True,
+            }
         start_time = time.perf_counter()
 
         symbol_key = (dataset_name or symbol or "CUSTOM").upper()
@@ -255,8 +263,8 @@ class ForecastingService:
                 "symbol": symbol_key,
                 "market": "custom",
                 "source": "Uploaded Dataset",
-                "data_status": "FRESH",
-                "freshness": "FRESH",
+                "data_status": "UPLOADED_DATA",
+                "freshness": "UNKNOWN",
                 "observation_timestamp": str(df["Date"].iloc[-1])[:10],
                 "retrieved_at": datetime.now(timezone.utc).isoformat(),
                 "bar_count": len(df),
@@ -265,6 +273,12 @@ class ForecastingService:
                 "currency": "$",
                 "is_custom_dataset": True,
             }
+            try:
+                uploaded_cutoff = pd.to_datetime(df["Date"].iloc[-1], utc=True)
+                age_days = (pd.Timestamp.now(tz="UTC") - uploaded_cutoff).total_seconds() / 86400.0
+                metadata["freshness"] = "UNKNOWN" if age_days < -1.0 else "FRESH" if age_days <= 5.0 else "STALE"
+            except (TypeError, ValueError):
+                metadata["freshness"] = "UNKNOWN"
         else:
             target_symbol = symbol or "AAPL"
             period = "2y" if horizon <= 5 else "5y"
@@ -373,7 +387,7 @@ class ForecastingService:
         abstention = UncertaintyEngine.evaluate_abstention(
             bar_count=len(df),
             horizon=horizon,
-            freshness=metadata.get("freshness", "FRESH"),
+            freshness=metadata.get("freshness", "UNKNOWN"),
             val_metrics=val_metrics,
             model_name=selected_model_key,
         )
@@ -692,7 +706,7 @@ class ForecastingService:
             "hardware": hw_profile,
             "model_availability": active_availability.get("state", "Ready"),
             "model_availability_reason": active_availability.get("reason", "Model verified."),
-            "data_freshness": metadata.get("freshness", "FRESH"),
+            "data_freshness": metadata.get("freshness", "UNKNOWN"),
             "data_source": metadata.get("source", "market_service"),
             "observation_timestamp": metadata.get("observation_timestamp"),
             "retrieved_at": metadata.get("retrieved_at"),
@@ -816,6 +830,7 @@ class ForecastingService:
             "retrieved_at": metadata.get("retrieved_at"),
             "data_source": metadata.get("source"),
             "freshness": metadata.get("freshness"),
+            "target_date_basis": "Weekday estimate; exchange holidays are not modeled.",
             "interval": interval_data,
             "directional_probability": round(directional_prob, 4),
             "directional_label": "BULLISH" if directional_prob > 0.52 else ("BEARISH" if directional_prob < 0.48 else "NEUTRAL"),

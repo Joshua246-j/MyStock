@@ -50,6 +50,11 @@ class MarketDataService:
         
         cached_data = None if force_refresh else self.cache.get(cache_key)
         if cached_data:
+            if fetch_func_name == "get_quote":
+                provider_status = cached_data.get("data_status")
+                if provider_status:
+                    cached_data["provider_data_status"] = provider_status
+                cached_data["data_status"] = "CACHED"
             cached_data["status"] = "CACHED"
             return cached_data
             

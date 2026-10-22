@@ -164,7 +164,7 @@
             let bannerBorderClass = '';
             let bannerTextClass = '';
             let bannerIconName = 'check-circle-2';
-            let bannerTitle = 'All Systems Operational';
+            let bannerTitle = 'Checking system status';
             let bannerDesc = 'Local API, AI engine, vector storage, and market data providers are online and ready.';
 
             if (state === 'issue') {
@@ -200,7 +200,7 @@
                 bannerBorderClass = 'border-emerald-500/25';
                 bannerTextClass = 'text-emerald-800 dark:text-emerald-300';
                 bannerIconName = 'check-circle-2';
-                bannerTitle = 'All Systems Operational';
+                bannerTitle = 'System checks complete';
                 bannerDesc = 'Local API, AI engine, document retrieval, and market data providers are online.';
             }
 
@@ -1265,9 +1265,10 @@
             }));
             grid.querySelectorAll('[data-chart-index]').forEach(el => landingResizeObserver.observe(el));
             const goodQuotes = results.filter(result => result.quote).length;
-            const anyLive = results.some(result => ['REALTIME_QUOTE','LIVE','REGULAR_MARKET_OPEN'].includes(String(result.quote?.data_status || result.quote?.status || '').toUpperCase()));
-            const allOfficial = results.every(result => result.quote && ['OFFICIAL_CLOSE','CACHED','REALTIME_QUOTE','LIVE'].includes(String(result.quote?.data_status || result.quote?.status || '').toUpperCase()));
-            const sessionState = anyLive ? 'regular session active · verified real-time' : allOfficial ? 'weekend/after-hours (official close verified)' : 'quotes verified';
+            const quoteFreshness = quote => String(quote?.status || quote?.data_status || '').toUpperCase();
+            const anyMarketHoursQuote = results.some(result => quoteFreshness(result.quote) !== 'CACHED' && (String(result.quote?.data_status || '').toUpperCase() === 'PROVIDER_QUOTE' || result.quote?.market_session === 'REGULAR_MARKET_OPEN'));
+            const allStatusKnown = results.every(result => result.quote && ['PROVIDER_CLOSE','PROVIDER_QUOTE','CACHED','OFFICIAL_CLOSE','REALTIME_QUOTE','LIVE'].includes(quoteFreshness(result.quote)));
+            const sessionState = anyMarketHoursQuote ? 'provider quote during market hours' : allStatusKnown ? 'provider close or cached quote status' : 'provider status varies';
             status.textContent = `${goodQuotes}/${landingSymbols.length} exchange quotes · ${sessionState} · updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
 
         }
@@ -1292,17 +1293,20 @@
             if (quote) {
                 const releaseDate = quote.market_time ? new Date(quote.market_time) : null;
                 const releaseFmt = releaseDate ? `${releaseDate.toLocaleDateString([], {month:'short',day:'numeric'})} ${releaseDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : 'Session Close';
-                if (quote.data_status === 'REALTIME_QUOTE' || quote.market_session === 'REGULAR_MARKET_OPEN') {
+                if (quote.status === 'CACHED' || quote.data_status === 'CACHED') {
+                    source.className += ' bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
+                    source.textContent = `Cached · ${(quote.data_status || 'provider status unknown').replaceAll('_',' ')}`;
+                } else if (quote.data_status === 'PROVIDER_QUOTE' || quote.market_session === 'REGULAR_MARKET_OPEN') {
                     source.className += ' bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
-                    source.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1"></span>Live · ${escapeHtml(quote.exchange || 'MKT')}`;
-                } else if (quote.data_status === 'OFFICIAL_CLOSE') {
+                    source.textContent = `Market open · provider quote · ${quote.exchange || 'MKT'}`;
+                } else if (['PROVIDER_CLOSE','OFFICIAL_CLOSE'].includes(quote.data_status)) {
                     source.className += ' bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
-                    source.textContent = `Close · ${releaseFmt}`;
+                    source.textContent = `Provider close · ${releaseFmt}`;
                 } else {
                     source.className += ' bg-black/[.04] text-apple-gray border-black/[.06] dark:bg-white/[.06] dark:border-white/[.08]';
-                    source.textContent = (quote.status || quote.data_status || 'Verified').replaceAll('_',' ');
+                source.textContent = (quote.status || quote.data_status || 'Freshness unknown').replaceAll('_',' ');
                 }
-                source.title = `Exchange: ${quote.exchange || 'Official Exchange'} | Market Recorded: ${quote.market_time || 'Session Close'} | Provider: ${quote.source || 'Yahoo Finance'} | Retrieved: ${quote.retrieved_at || 'Just now'}`;
+                source.title = `Exchange: ${quote.exchange || 'Unknown'} | Market Recorded: ${quote.market_time || 'Time unavailable'} | Provider: ${quote.source || 'Unknown'} | Retrieved: ${quote.retrieved_at || 'Time unavailable'}`;
             } else {
                 source.className += ' bg-rose-500/10 text-rose-600 border-rose-500/20';
                 source.textContent = 'Unavailable';
@@ -1330,7 +1334,7 @@
             const releaseShort = quote?.market_time ? `${new Date(quote.market_time).toLocaleDateString([], {month:'short',day:'numeric'})} ${new Date(quote.market_time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : 'Recent';
             const detail = document.createElement('span'); detail.className = 'truncate text-right font-medium';
             detail.textContent = quote ? `${quote.exchange || 'Exchange'} · ${releaseShort}` : (result.error || 'Chart unavailable');
-            detail.title = quote ? `Official quote recorded by ${quote.exchange || 'exchange'} on ${quote.market_time || 'session close'}. Retrieved via Yahoo Finance API at ${new Date(quote.retrieved_at || Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}.` : '';
+            detail.title = quote ? `Provider-reported quote for ${quote.exchange || 'exchange'} at ${quote.market_time || 'time unavailable'}. Retrieved via ${quote.source || 'market provider'} at ${quote.retrieved_at || 'time unavailable'}.` : '';
             footer.append(volume,detail); card.append(footer); document.getElementById('landing-watch-grid').append(card);
             card.hidden = watchlistOnly && !watchlistSymbols.has(item.symbol);
             if (rows?.length) {
@@ -1619,7 +1623,7 @@
             const publisherInit = String(publisherName).trim().slice(0, 1).toUpperCase();
             
             // Format time ago
-            let timeAgo = 'Just now';
+            let timeAgo = 'Date unavailable';
             if (item.published_at) {
                 const diffMs = Date.now() - Date.parse(item.published_at);
                 const diffMins = Math.floor(diffMs / 60000);
@@ -2543,18 +2547,21 @@
                         
                         const statusBadge = document.getElementById('stock-status');
                         statusBadge.classList.remove('hidden');
-                        if (['OFFICIAL_CLOSE'].includes(quote.data_status)) {
+                        if (quote.status === 'CACHED' || quote.data_status === 'CACHED') {
+                            statusBadge.className = 'px-3 py-1 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 uppercase';
+                            statusBadge.textContent = `CACHED · ${(quote.data_status || 'STATUS UNKNOWN').replaceAll('_', ' ')}`;
+                        } else if (['PROVIDER_CLOSE','OFFICIAL_CLOSE'].includes(quote.data_status)) {
                             statusBadge.className = 'px-3 py-1 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 uppercase';
-                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>OFFICIAL CLOSE`;
-                        } else if (['REGULAR_MARKET_OPEN','REALTIME_QUOTE','LIVE'].includes(quote.data_status)) {
+                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>PROVIDER CLOSE`;
+                        } else if (['REGULAR_MARKET_OPEN','PROVIDER_QUOTE','REALTIME_QUOTE','LIVE'].includes(quote.data_status)) {
                             statusBadge.className = 'px-3 py-1 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase';
-                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>MARKET OPEN`;
+                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>MARKET OPEN · PROVIDER QUOTE`;
                         } else if (['CACHED'].includes(quote.status)) {
                             statusBadge.className = 'px-3 py-1 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 uppercase';
-                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>VERIFIED (CACHED)`;
+                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>CACHED`;
                         } else {
                             statusBadge.className = 'px-3 py-1 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-1.5 bg-gray-500/10 text-apple-gray uppercase';
-                            statusBadge.textContent = (quote.data_status || quote.status || 'VERIFIED').replaceAll('_',' ');
+                            statusBadge.textContent = (quote.data_status || quote.status || 'FRESHNESS UNKNOWN').replaceAll('_',' ');
                         }
                         
                         document.getElementById('basic-metrics').innerHTML = 
@@ -2850,7 +2857,7 @@
             const rng = document.getElementById('forecast-price-interval'); if (rng) rng.textContent = 'Safety criteria not met';
             const exp = document.getElementById('forecast-expected-return'); if (exp) exp.textContent = 'N/A';
             const dir = document.getElementById('forecast-direction-label'); if (dir) dir.textContent = 'Insufficient edge over persistence';
-            const prv = document.getElementById('forecast-prob-val'); if (prv) prv.textContent = '50.0%';
+            const prv = document.getElementById('forecast-prob-val'); if (prv) prv.textContent = 'Unavailable';
             const mae = document.getElementById('forecast-val-mae'); if (mae) mae.textContent = 'N/A';
 
             const chartContainer = document.getElementById('forecastDedicatedChart');
@@ -2997,7 +3004,7 @@
 
             // Engine latency & active model pill
             const latencyEl = document.getElementById('forecast-engine-latency');
-            if (latencyEl) latencyEl.textContent = `${data.system_health?.latency_ms || 12}ms`;
+            if (latencyEl) latencyEl.textContent = Number.isFinite(Number(data.system_health?.latency_ms)) ? `${data.system_health.latency_ms}ms` : '—';
             const activePillLabel = document.getElementById('active-model-pill-label');
             if (activePillLabel) activePillLabel.textContent = data.model_metadata?.[data.selected_model]?.short_name || data.selected_model || 'Selected Model';
 
@@ -3037,25 +3044,28 @@
                     freshnessPill.textContent = `Cutoff: ${cutoff} · Stale (>5d · Bands Expanded)`;
                 } else {
                     freshnessPill.className = 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-                    freshnessPill.textContent = `Cutoff: ${cutoff} · Point-in-Time Verified`;
+                    freshnessPill.textContent = `Observation cutoff: ${cutoff} · freshness checked`;
                 }
             }
 
             const tgtEl = document.getElementById('forecast-target-price'); if (tgtEl) tgtEl.textContent = price;
-            const rngEl = document.getElementById('forecast-price-interval'); if (rngEl) rngEl.textContent = `Range: ${curr} ${low} – ${high} (${data.interval?.confidence_percent || 80}% Conformal Band)`;
+            const rngEl = document.getElementById('forecast-price-interval'); if (rngEl) rngEl.textContent = `Residual range: ${curr} ${low} – ${high} (${data.interval?.confidence_percent || 80}% nominal level)`;
 
-            const ret = Number(data.interval?.expected_return_percent || 0);
+            const retRaw = data.interval?.expected_return_percent == null ? NaN : Number(data.interval.expected_return_percent);
+            const hasReturn = Number.isFinite(retRaw);
+            const ret = hasReturn ? retRaw : null;
             const retEl = document.getElementById('forecast-expected-return');
             if (retEl) {
-                retEl.textContent = `${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%`;
-                retEl.className = `text-2xl font-bold tracking-tight ${ret >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`;
+                retEl.textContent = hasReturn ? `${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%` : 'Unavailable';
+                retEl.className = `text-2xl font-bold tracking-tight ${!hasReturn ? 'text-apple-gray' : ret >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`;
             }
 
             const dirEl = document.getElementById('forecast-direction-label');
-            if (dirEl) dirEl.textContent = `Direction: ${data.directional_label || 'NEUTRAL'} (${data.horizon}-Session Horizon)`;
+            if (dirEl) dirEl.textContent = `Direction: ${data.directional_label || 'Unavailable'} (${data.horizon}-Session Horizon)`;
 
-            const probVal = data.llm_payload?.directional_probability_bullish_percent ?? (data.directional_probability ? (data.directional_probability * 100).toFixed(1) : 50);
-            const prvEl = document.getElementById('forecast-prob-val'); if (prvEl) prvEl.textContent = `${probVal}% Bullish`;
+            const probRaw = data.directional_probability == null ? NaN : Number(data.directional_probability) * 100;
+            const probVal = Number.isFinite(probRaw) ? `${probRaw.toFixed(1)}%` : 'Unavailable';
+            const prvEl = document.getElementById('forecast-prob-val'); if (prvEl) prvEl.textContent = `${probVal} model-implied score`;
             const mdlEl = document.getElementById('forecast-model-name'); if (mdlEl) mdlEl.textContent = `Model: ${data.model_name || data.selected_model.replace('_', ' ').toUpperCase()}`;
 
             const val = data.llm_payload?.walk_forward_metrics || data.validation || {};
@@ -3071,7 +3081,7 @@
             if (chartBadge) chartBadge.textContent = `${data.model_metadata?.[data.selected_model]?.short_name || data.selected_model.toUpperCase()} · ${data.horizon}D`;
             const chartCaption = document.getElementById('forecast-chart-caption');
             if (chartCaption) {
-                chartCaption.textContent = `Forecast origin session: ${data.last_bar_at || 'Cutoff'} (${curr} ${Number(data.current_price).toFixed(2)}) → Target: ${data.chart_data?.target_date || 'Projected'} (${curr} ${Number(data.interval?.expected_price).toFixed(2)} · ${data.interval?.confidence_percent || 80}% Conformal Band: ${curr} ${low} to ${curr} ${high}).`;
+                chartCaption.textContent = `Forecast origin session: ${data.last_bar_at || 'Cutoff'} (${curr} ${Number(data.current_price).toFixed(2)}) → Target: ${data.chart_data?.target_date || 'Projected'} (${curr} ${Number(data.interval?.expected_price).toFixed(2)} · residual range, ${data.interval?.confidence_percent || 80}% nominal level: ${curr} ${low} to ${curr} ${high}).`;
             }
 
             // Render Ensemble Disagreement & Reliability Panel
@@ -3199,7 +3209,7 @@
                 tpContainer.append(card3);
             }
 
-            // 2. Modern Visual Analysis Hub: Directional Probability Donut Chart
+            // 2. Modern Visual Analysis Hub: Model-Implied Directional Score Donut
             const bullArc = document.getElementById('directional-donut-bull-arc');
             const bearArc = document.getElementById('directional-donut-bear-arc');
             const donutPct = document.getElementById('directional-donut-pct');
@@ -3209,8 +3219,9 @@
             const donutBalanceBull = document.getElementById('donut-balance-bull');
             const donutBalanceBear = document.getElementById('donut-balance-bear');
 
-            const pBull = Math.max(0, Math.min(100, Number(probVal)));
-            const pBear = Math.max(0, Math.min(100, 100 - pBull));
+            const hasDirectionalScore = Number.isFinite(probRaw);
+            const pBull = hasDirectionalScore ? Math.max(0, Math.min(100, probRaw)) : 0;
+            const pBear = hasDirectionalScore ? Math.max(0, Math.min(100, 100 - pBull)) : 0;
             if (bullArc) {
                 bullArc.setAttribute('stroke-dasharray', `${pBull} ${100 - pBull}`);
                 bullArc.setAttribute('stroke-dashoffset', '0');
@@ -3221,9 +3232,9 @@
             }
             if (donutBalanceBull) donutBalanceBull.style.width = `${pBull}%`;
             if (donutBalanceBear) donutBalanceBear.style.width = `${pBear}%`;
-            if (donutPct) donutPct.textContent = `${pBull.toFixed(0)}%`;
-            if (donutLabel) donutLabel.textContent = data.directional_label || (pBull >= 50 ? 'BULLISH' : 'BEARISH');
-            if (donutBullText) donutBullText.textContent = `Bullish: ${pBull.toFixed(1)}%`;
+            if (donutPct) donutPct.textContent = hasDirectionalScore ? `${pBull.toFixed(0)}%` : '—';
+            if (donutLabel) donutLabel.textContent = hasDirectionalScore ? (data.directional_label || 'NEUTRAL') : 'UNAVAILABLE';
+            if (donutBullText) donutBullText.textContent = hasDirectionalScore ? `Model-implied score: ${pBull.toFixed(1)}%` : 'Model-implied score unavailable';
             if (donutBearText) donutBearText.textContent = `Bearish: ${pBear.toFixed(1)}%`;
 
             // Update Dynamic Model Specs Ribbon
@@ -3348,9 +3359,9 @@
                 const details = [
                     { label: 'Evaluation Method', val: 'Chronological Walk-Forward Backtesting (No random shuffle)' },
                     { label: 'Purged Embargo Gap', val: `${data.horizon} sessions (Zero lookahead target leakage)` },
-                    { label: 'OOS Sample Size', val: `${val.sample_size || val.test_sample_size || 30} historical test sessions` },
-                    { label: 'Directional Hit Rate', val: `${val.directional_accuracy_percent || 50}%` },
-                    { label: 'Interval Calibration', val: `${data.interval?.method || 'Conformal residual quantiles'}` },
+                    { label: 'OOS Sample Size', val: `${val.sample_size ?? val.test_sample_size ?? 'Unavailable'}${(val.sample_size ?? val.test_sample_size) != null ? ' historical test sessions' : ''}` },
+                    { label: 'Directional Hit Rate', val: `${val.directional_accuracy_percent ?? 'Unavailable'}${val.directional_accuracy_percent != null ? '%' : ''}` },
+                    { label: 'Interval Method', val: `${data.interval?.method || 'Unavailable'}` },
                     { label: 'Interval Width', val: `${data.interval?.interval_width_percent || '--'}% of stock price` },
                     { label: 'Data Provenance', val: `${data.data_source || 'Market Service'} (As-of ${data.last_bar_at || 'Latest'})` },
                 ];
@@ -3409,7 +3420,7 @@
                         </td>
                         <td class="py-2.5 font-mono ${isBest ? 'text-emerald-600 dark:text-emerald-400 font-bold' : ''}">${m.mae_percent != null ? Number(m.mae_percent).toFixed(2) + '%' : '—'}</td>
                         <td class="py-2.5 font-mono">${m.rmse_percent != null ? Number(m.rmse_percent).toFixed(2) + '%' : '—'}</td>
-                        <td class="py-2.5 font-mono">${m.directional_accuracy_percent != null ? Number(m.directional_accuracy_percent).toFixed(1) + '%' : '50.0%'}</td>
+                        <td class="py-2.5 font-mono">${m.directional_accuracy_percent != null ? Number(m.directional_accuracy_percent).toFixed(1) + '%' : 'Unavailable'}</td>
                         <td class="py-2.5 font-mono font-semibold ${imprColor}">${isBaseline ? 'Baseline (0.0%)' : imprStr}</td>
                         <td class="py-2.5 text-right">${statusBadge}</td>
                     `;
@@ -3432,7 +3443,7 @@
                         itemDiv.innerHTML = `
                             <div class="truncate">
                                 <span class="font-medium text-gray-800 dark:text-gray-200 truncate block">${escapeHtml(n.title || '')}</span>
-                                <span class="text-[10px] text-apple-gray">${escapeHtml(n.publisher || 'Verified Publisher')} · published ${escapeHtml(pubDateStr)}</span>
+                                <span class="text-[10px] text-apple-gray">${escapeHtml(n.publisher || 'Publisher unavailable')} · published ${escapeHtml(pubDateStr)}</span>
                             </div>
                             <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">Sentiment Grounding</span>
                         `;
@@ -3669,7 +3680,7 @@
             } else if (numDist <= -8.0) {
                 revStatus = 'Deep Discount';
                 revBadgeClass = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
-                revDesc = 'Trading deeply below 50 SMA; high-probability bounce setup on value revival.';
+                revDesc = 'Price is well below its 50-day average; this descriptive signal does not establish a rebound.';
             }
             if (revStatusEl) {
                 revStatusEl.className = `text-[10px] font-bold px-1.5 py-0.5 rounded ${revBadgeClass}`;
@@ -3734,20 +3745,22 @@
                 `;
             }
 
-            // 5. Actionable Stock Suggestion & Pro Tip Box
-            const currPrice = Number(data.current_price) || 100;
-            const expPrice = Number(data.interval?.expected_price) || currPrice * 1.04;
-            const expRet = Number(data.interval?.expected_return_percent) || 4.0;
-            const dirProb = data.llm_payload?.directional_probability_bullish_percent || (data.directional_probability ? data.directional_probability * 100 : 68);
-
-            const atrAmt = currPrice * (numAtr / 100.0);
-            const keySupport = Math.max(0.1, currPrice - (1.4 * atrAmt));
-            const trailingStop = Math.max(0.1, currPrice - (2.0 * atrAmt));
-            const entryLow = currPrice * 0.992;
-            const entryHigh = currPrice * 1.006;
-            const riskAmt = Math.max(0.01, currPrice - trailingStop);
-            const rewardAmt = Math.max(0.01, expPrice - currPrice);
-            const rrRatio = (rewardAmt / riskAmt).toFixed(1);
+            // 5. Show only values supplied by the forecast result. Missing values
+            // stay unavailable; do not invent an entry, stop, score, or return.
+            const currPrice = Number(data.current_price);
+            const expPrice = Number(data.interval?.expected_price);
+            const expRet = Number(data.interval?.expected_return_percent);
+            const dirScoreRaw = data.directional_probability == null ? NaN : Number(data.directional_probability) * 100;
+            const dirScore = Number.isFinite(dirScoreRaw) ? dirScoreRaw : null;
+            const hasCurrentPrice = Number.isFinite(currPrice) && currPrice > 0;
+            const hasExpectedPrice = Number.isFinite(expPrice) && expPrice > 0;
+            const hasExpectedReturn = Number.isFinite(expRet);
+            const currentCurrency = data.currency === 'INR' ? '₹' : (data.currency || '$');
+            const expectedValue = hasExpectedPrice ? `${currentCurrency}${expPrice.toFixed(2)}` : 'Unavailable';
+            const expectedReturnValue = hasExpectedReturn ? `${expRet >= 0 ? '+' : ''}${expRet.toFixed(2)}%` : 'Unavailable';
+            const rangeValue = Number.isFinite(Number(data.interval?.lower_bound_price)) && Number.isFinite(Number(data.interval?.upper_bound_price))
+                ? `${currentCurrency}${Number(data.interval.lower_bound_price).toFixed(2)} – ${currentCurrency}${Number(data.interval.upper_bound_price).toFixed(2)}`
+                : 'Unavailable';
 
             const actionBadgeEl = document.getElementById('stock-suggestion-action');
             const rrEl = document.getElementById('stock-suggestion-rr');
@@ -3757,40 +3770,26 @@
             const stopEl = document.getElementById('stock-trailing-stop');
             const tipTextEl = document.getElementById('stock-actionable-tip-text');
 
-            let actionLabel = 'Accumulate on Dips';
-            let actionClass = 'bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs';
-            let tipText = `Based on multi-model alignment, ${escapeHtml(data.symbol)} exhibits favorable upward drift (${expRet >= 0 ? '+' : ''}${expRet.toFixed(2)}% expected target over ${data.horizon} sessions) with a ${dirProb}% directional probability. Set initial stop-loss at ${curr}${trailingStop.toFixed(2)} to protect against regime breakdowns.`;
-
-            if (expRet >= 4.0 && dirProb >= 65) {
-                actionLabel = 'Strong Momentum Long';
-                actionClass = 'bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs';
-                tipText = `High model agreement with +${expRet.toFixed(2)}% median target. Favorable risk/reward of 1 : ${rrRatio}. Consider scaling into positions between ${curr}${entryLow.toFixed(2)} and ${curr}${entryHigh.toFixed(2)} with strict stop at ${curr}${trailingStop.toFixed(2)}.`;
-            } else if (expRet <= -3.0 || dirProb <= 40) {
-                actionLabel = 'Defensive / Tighten Stops';
-                actionClass = 'bg-rose-600 dark:bg-rose-500 text-white shadow-xs';
-                tipText = `Models indicate elevated downside risk (${expRet.toFixed(2)}% projected return). Avoid unhedged long positions; key support lies at ${curr}${keySupport.toFixed(2)}. If broken, expect further mean-reversion drift.`;
-            } else if (Math.abs(expRet) < 1.5) {
-                actionLabel = 'Range-Bound / Neutral';
-                actionClass = 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-xs';
-                tipText = `Price is consolidating near fair value with balanced directional odds (${dirProb}% bullish). Optimal strategy is selling options premium or waiting for a confirmed breakout above 20D highs.`;
-            }
+            const actionLabel = dirScore == null ? 'Directional score unavailable' : `Model-implied score ${dirScore.toFixed(1)}%`;
+            const actionClass = 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-xs';
+            const tipText = `${data.symbol || 'This symbol'} · ${data.horizon || '—'}-session model estimate: expected price ${expectedValue}; estimated return ${expectedReturnValue}; residual range ${rangeValue}. The directional score${dirScore == null ? ' is unavailable' : ` is ${dirScore.toFixed(1)}% and is not calibrated as a probability`}. This is a model output, not personalized financial advice.`;
 
             if (actionBadgeEl) {
                 actionBadgeEl.className = `px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${actionClass}`;
                 actionBadgeEl.textContent = actionLabel;
             }
-            if (rrEl) rrEl.textContent = `1 : ${rrRatio}`;
-            if (entryEl) entryEl.textContent = `${curr}${entryLow.toFixed(2)} – ${curr}${entryHigh.toFixed(2)}`;
-            if (supportEl) supportEl.textContent = `${curr}${keySupport.toFixed(2)}`;
-            if (targetEl) targetEl.textContent = `${curr}${expPrice.toFixed(2)}`;
-            if (stopEl) stopEl.textContent = `${curr}${trailingStop.toFixed(2)}`;
+            if (rrEl) rrEl.textContent = `${data.interval?.confidence_percent || '—'}% nominal level`;
+            if (entryEl) entryEl.textContent = hasCurrentPrice ? `${currentCurrency}${currPrice.toFixed(2)}` : 'Unavailable';
+            if (supportEl) supportEl.textContent = data.last_bar_at || 'Unavailable';
+            if (targetEl) targetEl.textContent = expectedValue;
+            if (stopEl) stopEl.textContent = rangeValue;
             if (tipTextEl) tipTextEl.textContent = tipText;
 
             const regimeBadge = document.getElementById('forecast-regime-badge');
             if (regimeBadge) {
                 regimeBadge.textContent = `${data.horizon}D Horizon · ${actionLabel}`;
             }
-            // 3 Distinct Reliability Badges (Nominal Interval, Empirical Holdout Coverage, Directional Tilt)
+            // 3 Distinct Forecast Metadata Badges (Nominal Range, Sample Coverage, Model-Implied Score)
             const nomBadge = document.getElementById('forecast-nominal-interval-badge');
             if (nomBadge) {
                 nomBadge.textContent = `${data.interval?.confidence_percent || data.interval?.nominal_confidence_percent || 80}% Nominal Band`;
@@ -3799,24 +3798,20 @@
             if (covBadge) {
                 if (data.interval?.empirical_coverage_percent != null) {
                     const covVal = Number(data.interval.empirical_coverage_percent).toFixed(1);
-                    const verdict = data.interval.calibration_verdict || 'well_calibrated';
-                    covBadge.textContent = `${covVal}% Holdout Coverage`;
-                    if (verdict === 'well_calibrated') {
-                        covBadge.className = 'px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20';
-                        covBadge.title = `Empirically verified on out-of-sample holdouts (Well-calibrated within ${Math.abs(data.interval.coverage_gap_percent || 0).toFixed(1)}% of nominal)`;
-                    } else {
-                        covBadge.className = 'px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20';
-                        covBadge.title = `Coverage gap: ${data.interval.coverage_gap_percent != null ? data.interval.coverage_gap_percent.toFixed(1) + '%' : 'Moderate dispersion'}`;
-                    }
+                    const verdict = data.interval.calibration_verdict || 'Assessment unavailable';
+                    covBadge.textContent = `${covVal}% Sample Coverage`;
+                    covBadge.className = 'px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20';
+                    covBadge.title = `${verdict}; ${data.interval.residual_sample_size || 0} residual samples`;
                 } else {
-                    covBadge.textContent = 'Holdout Coverage: Verifying...';
+                    covBadge.textContent = 'Sample Coverage: unavailable';
                     covBadge.className = 'px-2.5 py-1 rounded-xl text-xs font-bold bg-black/5 dark:bg-white/5 text-apple-gray border border-black/10 dark:border-white/10';
                 }
             }
             const dirBadge = document.getElementById('forecast-directional-prob-badge');
             if (dirBadge) {
-                dirBadge.textContent = `${dirProb}% Bullish Probability`;
-                dirBadge.className = `px-2.5 py-1 rounded-xl text-xs font-bold ${dirProb >= 50 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'}`;
+                const dirProb = data.directional_probability == null ? null : Number(data.directional_probability) * 100;
+                dirBadge.textContent = Number.isFinite(dirProb) ? `${dirProb.toFixed(1)}% Model-Implied Direction Score` : 'Direction score unavailable';
+                dirBadge.className = `px-2.5 py-1 rounded-xl text-xs font-bold ${Number.isFinite(dirProb) ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20' : 'bg-black/5 dark:bg-white/5 text-apple-gray border border-black/10 dark:border-white/10'}`;
             }
             const confPill = document.getElementById('forecast-confidence-pill');
             if (confPill) {
@@ -4173,10 +4168,12 @@
                         selectStockAndForecast(item.symbol);
                     };
 
-                    const ret = Number(item.expected_return_percent || 0);
-                    const isPos = ret >= 0;
+                    const ret = Number(item.expected_return_percent);
+                    const hasReturn = Number.isFinite(ret);
+                    const isPos = hasReturn && ret >= 0;
                     const curr = item.currency === 'INR' ? '₹' : '$';
-                    const prob = item.directional_probability ? (item.directional_probability * 100).toFixed(0) : '50';
+                    const prob = item.directional_probability == null ? 'Unavailable' : `${(item.directional_probability * 100).toFixed(0)}%`;
+                    const expectedPrice = Number(item.expected_price);
                     const sparklineSvg = createSparklineSvg(item.sparkline_points, isPos);
 
                     card.innerHTML = `
@@ -4184,19 +4181,19 @@
                             <div class="flex items-center justify-between mb-1">
                                 <span class="font-bold text-xs text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">${escapeHtml(item.symbol)}</span>
                                 <span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold ${isPos ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'}">
-                                    ${isPos ? '▲ +' : '▼ '}${ret.toFixed(1)}%
+                                    ${hasReturn ? `${isPos ? '▲ +' : '▼ '}${ret.toFixed(1)}%` : 'Return unavailable'}
                                 </span>
                             </div>
                             <div class="my-1 flex items-center justify-between">
                                 <div>
                                     <div class="text-[9px] text-apple-gray uppercase font-semibold">Target (${item.horizon}D)</div>
-                                    <div class="text-sm font-bold text-gray-900 dark:text-gray-100">${curr}${Number(item.expected_price || 0).toFixed(1)}</div>
+                                    <div class="text-sm font-bold text-gray-900 dark:text-gray-100">${Number.isFinite(expectedPrice) ? `${curr}${expectedPrice.toFixed(1)}` : 'Unavailable'}</div>
                                 </div>
                                 <div class="shrink-0 flex items-center justify-end">${sparklineSvg}</div>
                             </div>
                         </div>
                         <div class="pt-1.5 border-t border-black/[0.03] dark:border-white/[0.04] flex items-center justify-between text-[10px]">
-                            <span class="text-indigo-600 dark:text-indigo-400 font-semibold">${prob}% Bull · <span class="text-apple-gray font-normal">${item.last_bar_at ? item.last_bar_at.slice(5) : 'Verified'}</span></span>
+                            <span class="text-indigo-600 dark:text-indigo-400 font-semibold">${prob} model-implied score · <span class="text-apple-gray font-normal">${item.last_bar_at ? item.last_bar_at.slice(5) : 'Cutoff unavailable'}</span></span>
                             <span class="text-apple-gray group-hover:translate-x-0.5 transition font-medium">View →</span>
                         </div>
                     `;
@@ -4226,7 +4223,7 @@
 
         function askAiAboutForecast() {
             if (!currentSymbol) return;
-            const prompt = `Provide an evidence-grounded explanation of the ${currentForecastHorizon}-session forecast for ${currentSymbol}. Explain the estimated return, calibrated prediction intervals, key signals, and walk-forward validation performance.`;
+            const prompt = `Provide an evidence-grounded explanation of the ${currentForecastHorizon}-session forecast for ${currentSymbol}. Explain the estimated return, residual-based uncertainty range, model-implied directional score, key signals, and walk-forward validation performance.`;
             startSuggestedChat(prompt);
         }
 
@@ -4454,7 +4451,7 @@
 
             const availEl = document.getElementById('model-info-avail-text');
             if (availEl) {
-                availEl.textContent = `Model Status: Ready (Calibrated & Verified · ${meta.model_version || 'v2.4'})`;
+                availEl.textContent = `Model Status: Registered; this check does not evaluate forecast quality (${meta.model_version || 'version unavailable'})`;
             }
 
             const hwEl = document.getElementById('model-info-hw-profile');
@@ -4505,6 +4502,11 @@
 
                 const sys = data.system_profile || {};
                 const diag = data.diagnostics || {};
+                const statusBadge = document.getElementById('system-health-status-badge');
+                if (statusBadge) {
+                    statusBadge.textContent = diag.healthy ? 'Ready' : 'Dependency issue';
+                    statusBadge.className = `px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${diag.healthy ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'}`;
+                }
 
                 const cpuMetric = document.getElementById('health-cpu-metric');
                 if (cpuMetric) cpuMetric.textContent = `${sys.cpu_percent || 0}%`;
@@ -4522,9 +4524,9 @@
                 if (gpuSub) gpuSub.textContent = sys.gpu_device_name || 'Pure CPU Hardware Aware';
 
                 const engineMetric = document.getElementById('health-engine-metric');
-                if (engineMetric) engineMetric.textContent = diag.engine_status?.toUpperCase() || 'ONLINE';
+                if (engineMetric) engineMetric.textContent = diag.engine_status?.toUpperCase() || 'UNKNOWN';
                 const engineSub = document.getElementById('health-engine-sub');
-                if (engineSub) engineSub.textContent = diag.healthy ? 'Zero Degradation' : 'Stale Warnings Active';
+                if (engineSub) engineSub.textContent = diag.healthy ? 'Dependency checks passed' : 'One or more dependency checks failed';
 
                 // Render Data Providers
                 const provList = document.getElementById('health-providers-list');
@@ -4533,7 +4535,7 @@
                     Object.entries(data.data_providers).forEach(([k, p]) => {
                         const item = document.createElement('div');
                         item.className = 'p-3 rounded-xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between text-xs';
-                        const isConn = p.status === 'Connected' || p.status === 'Ready' || p.status === 'Available';
+                    const isConn = p.status === 'Available' || p.status === 'Probe succeeded';
                         item.innerHTML = `
                             <div>
                                 <span class="font-bold text-gray-900 dark:text-gray-100 block">${escapeHtml(p.name)}</span>
@@ -4541,7 +4543,7 @@
                             </div>
                             <div class="text-right">
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isConn ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}">${escapeHtml(p.status)}</span>
-                                <span class="block text-[9px] text-apple-gray mt-0.5">${escapeHtml(p.freshness_policy || 'Hourly')}</span>
+                                <span class="block text-[9px] text-apple-gray mt-0.5">${escapeHtml(p.data_status || p.freshness_policy || 'Status unavailable')}</span>
                             </div>
                         `;
                         provList.append(item);
@@ -4561,7 +4563,7 @@
                             <td class="py-2 text-apple-gray">${escapeHtml(m.model_type)}</td>
                             <td class="py-2 font-mono text-apple-gray">${escapeHtml(m.hardware_requirements)}</td>
                             <td class="py-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isReady ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}">${escapeHtml(m.availability)}</span></td>
-                            <td class="py-2 text-right text-apple-gray font-mono text-[10px]">${escapeHtml(m.last_successful_execution || 'Cutoff Verified')}</td>
+                            <td class="py-2 text-right text-apple-gray font-mono text-[10px]">${escapeHtml(m.last_successful_execution || 'Not tracked')}</td>
                         `;
                         modelsList.append(row);
                     });
@@ -4592,9 +4594,7 @@
                 const data = await res.json();
                 if (data.success) {
                     const diagMsg = document.getElementById('health-diagnostics-msg');
-                    if (diagMsg) {
-                        diagMsg.innerHTML = '<span class="text-emerald-600 dark:text-emerald-400 font-semibold">✓ System caches revalidated, stale records purged, and all models confirmed healthy and synchronized.</span>';
-                    }
+                    if (diagMsg) diagMsg.textContent = data.message || 'Forecast cache cleared and hardware measurements refreshed. Provider availability was not rechecked.';
                     if (currentSymbol) {
                         runForecast(true);
                     }
@@ -4721,7 +4721,7 @@
             macd:'MACD (12, 26, 9 bars), signal, and histogram, calculated in Python.',
             atr:'ATR (14 bars), calculated in Python from historical high, low, and close.',
             performance:'Indexed close-price performance. First available close = 100; no forecast.',
-            forecast:'Probabilistic ML forecast trajectory with calibrated prediction interval bounds and origin reference.'
+            forecast:'Model forecast trajectory with residual-based uncertainty bounds and observation origin reference.'
         };
         function chartBarLabel() { return activeChartInterval === '1wk' ? 'week' : activeChartInterval === '1mo' ? 'month' : 'session'; }
         function setAnalysisView(view) {
@@ -5562,9 +5562,9 @@
                 items.push({
                     name: 'Application API',
                     icon: 'server',
-                    state: 'ready',
-                    label: 'Operational',
-                    detail: 'Local FastAPI application server is responding normally.'
+                    state: data.ready ? 'ready' : 'warning',
+                    label: data.ready ? 'Ready' : 'Responding; dependencies incomplete',
+                    detail: `Local API answered. Database: ${data.database || 'unknown'}; configured chat model: ${data.model_available ? 'available' : 'unavailable'}; embedding model: ${data.embedding_model_available ? 'available' : 'unavailable'}.`
                 });
 
                 // 2. Local AI Model
@@ -5639,8 +5639,8 @@
                         name: 'Market Data',
                         icon: 'chart-no-axes-combined',
                         state: 'ready',
-                        label: 'Connected',
-                        detail: `${data.market_data.provider || 'Provider connected'} · Live/cached quotes active (${data.market_data.data_status || 'verified'}).`
+                        label: 'Probe responded',
+                        detail: `${data.market_data.provider || 'Configured provider'} answered the availability probe (${data.market_data.data_status || 'freshness unknown'}). Quote freshness is reported per quote.`
                     });
                 } else {
                     items.push({
@@ -5662,8 +5662,8 @@
                         state: isWebAvailable ? 'ready' : 'warning',
                         label: isWebAvailable ? 'Operational' : 'Degraded',
                         detail: isWebAvailable 
-                            ? 'Google News RSS and live web page scraper are reachable.' 
-                            : 'External search endpoints are experiencing connection issues.'
+                            ? 'DNS lookup succeeded; retrieving a news feed was not tested.'
+                            : 'DNS lookup failed; news retrieval has not been tested.'
                     });
                 }
 
@@ -5674,7 +5674,7 @@
                 updateProjectStatus(items, summary, statusState);
 
             } catch (e) {
-                const message = e?.message || 'The app could not reach its local health endpoint.';
+                    const message = e?.message || 'The app could not reach its local health endpoint.';
                 updateProjectStatus([
                     {name:'Application API',icon:'server-off',state:'issue',label:'Offline',detail:`GET /api/health failed: ${message}`, action:'💡 Ensure backend server is running on port 8000.'},
                     {name:'Market Data',icon:'chart-no-axes-combined',state:'warning',label:'Unknown',detail:'Could not check provider status because local API is unreachable.'},
@@ -5720,7 +5720,7 @@
         window.restoreChatParameters = restoreChatParameters;
 
         // ==========================================
-        // AUTO-UPDATE GRAPHS & REAL-TIME QUOTE ENGINE
+        // Auto-refresh graphs and request provider quotes.
         // ==========================================
         let autoUpdateIntervalSeconds = 10;
         let autoUpdateCountdownSeconds = 10;
@@ -5755,11 +5755,11 @@
                 if (statusText) statusText.textContent = 'MANUAL (Paused)';
                 if (timerDesc) timerDesc.innerHTML = 'Auto-refresh paused &middot; Tap play icon to update';
             } else {
-                // Active Live mode
+                // Active auto-refresh mode
                 if (liveBadge) {
                     liveBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20';
                 }
-                if (statusText) statusText.textContent = `LIVE (${autoUpdateIntervalSeconds}s)`;
+                if (statusText) statusText.textContent = `AUTO-REFRESH (${autoUpdateIntervalSeconds}s)`;
                 if (timerDesc) timerDesc.innerHTML = `Continuous auto-refresh &middot; Next tick in <span id="chart-update-seconds" class="font-mono font-semibold text-emerald-600 dark:text-emerald-400">${autoUpdateIntervalSeconds}</span>s`;
                 autoUpdateCountdownSeconds = autoUpdateIntervalSeconds;
                 startAutoUpdateTimer();
@@ -5857,7 +5857,7 @@
                         const statusEl = document.getElementById('chart-source-status');
                         if (statusEl) {
                             const lastBar = histData.last_bar_at || histData.data.at(-1)?.Date || 'now';
-                            statusEl.textContent = `${histData.source || 'Provider'} \u00B7 verified \u00B7 ${period}/${interval} \u00B7 refreshed ${new Date().toLocaleTimeString()} (bar: ${lastBar})`;
+                            statusEl.textContent = `${histData.source || 'Provider'} · ${histData.data_status || 'freshness unknown'} · ${period}/${interval} · retrieved ${histData.retrieved_at || 'time unavailable'} (bar: ${lastBar})`;
                         }
                         renderChart(latestHistoryData, latestIndicatorData, analysisView);
                     }

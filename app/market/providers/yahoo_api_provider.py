@@ -64,7 +64,8 @@ class YahooApiProvider(MarketDataProvider):
                         pass
 
             market_session = "REGULAR_MARKET_OPEN" if is_market_open else "MARKET_CLOSED"
-            data_status = "REALTIME_QUOTE" if is_market_open else "OFFICIAL_CLOSE"
+            # Do not imply real-time delivery or an official exchange close.
+            data_status = "PROVIDER_QUOTE" if is_market_open else "PROVIDER_CLOSE"
 
             return {
                 "success": True,

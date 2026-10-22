@@ -191,10 +191,10 @@ def test_conformal_interval_with_empirical_coverage():
 
     assert interval["lower_bound_price"] < 103.0 < interval["upper_bound_price"]
     assert interval["nominal_confidence_percent"] == 80.0
-    # Holdout empirical coverage should be verified and close to nominal
+    # Coverage is descriptive because the interval and metric use the same residual sample.
     assert interval["empirical_coverage_percent"] is not None
     assert 65.0 <= interval["empirical_coverage_percent"] <= 95.0
-    assert interval["calibration_verdict"] in ("Well Calibrated", "Under-covering", "Over-covering")
+    assert "same residual sample" in interval["calibration_verdict"] or "not independent calibration" in interval["calibration_verdict"]
 
 
 def test_benchmark_models_honest_selection():
@@ -352,7 +352,7 @@ def test_custom_csv_upload_and_forecast_pipeline():
     from app.main import app
 
     client = TestClient(app)
-    dates = pd.date_range("2025-01-01", periods=130, freq="D")
+    dates = pd.date_range(end=pd.Timestamp.now().normalize(), periods=130, freq="D")
     df = pd.DataFrame({
         "Date": dates.strftime("%Y-%m-%d"),
         "Close": [100.0 + i * 0.4 + (i % 4) for i in range(130)],
