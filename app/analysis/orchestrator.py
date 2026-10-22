@@ -366,7 +366,7 @@ async def orchestrate_chat(
                 return row.settings if row and row.settings else {}
         settings = await asyncio.to_thread(load_settings)
 
-    timeout = max(1, min(float(settings.get("request_timeout", 30)), 180))
+    timeout = max(1, min(float(settings.get("request_timeout", 60)), 180))
     chart_period = chart_period if chart_period in {"1mo", "3mo", "6mo", "1y", "2y", "5y"} else "6mo"
     chart_interval = chart_interval if chart_interval in {"1d", "1wk", "1mo"} else "1d"
     chart_mode = chart_mode if chart_mode in {"line", "candlestick"} else "line"

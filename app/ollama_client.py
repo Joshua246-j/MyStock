@@ -82,7 +82,7 @@ class OllamaClient:
             return value
         raise OllamaError("Ollama returned an empty response. Retry your request.", code="ollama_empty_response")
 
-    async def generate(self, prompt: str, system: str = "", model: str = None, *, timeout: float = 30, temperature: float = 0.2, context_size: int = 4096, max_output_tokens: int = 2048, stream: bool = False, top_p: float = 0.9, top_k: int = 40, repeat_penalty: float = 1.1, seed: int = 0):
+    async def generate(self, prompt: str, system: str = "", model: str = None, *, timeout: float = 60, temperature: float = 0.2, context_size: int = 4096, max_output_tokens: int = 2048, stream: bool = False, top_p: float = 0.9, top_k: int = 40, repeat_penalty: float = 1.1, seed: int = 0):
         payload = {"model": model or self.model, "prompt": prompt, "system": system, "stream": stream, "keep_alive": "10m",
                    "options": {"temperature": temperature, "num_ctx": context_size, "num_predict": max_output_tokens, "top_p": top_p, "top_k": top_k, "repeat_penalty": repeat_penalty, "seed": seed}}
         result = await self._post("/api/generate", payload, timeout, stream=stream)
@@ -90,7 +90,7 @@ class OllamaClient:
             return result
         return self._completed_text(result, "response")
 
-    async def chat(self, messages: list, model: str = None, *, timeout: float = 30, temperature: float = 0.2, context_size: int = 4096, max_output_tokens: int = 2048, stream: bool = False, top_p: float = 0.9, top_k: int = 40, repeat_penalty: float = 1.1, seed: int = 0):
+    async def chat(self, messages: list, model: str = None, *, timeout: float = 60, temperature: float = 0.2, context_size: int = 4096, max_output_tokens: int = 2048, stream: bool = False, top_p: float = 0.9, top_k: int = 40, repeat_penalty: float = 1.1, seed: int = 0):
         payload = {"model": model or self.model, "messages": messages, "stream": stream, "keep_alive": "10m",
                    "options": {"temperature": temperature, "num_ctx": context_size, "num_predict": max_output_tokens, "top_p": top_p, "top_k": top_k, "repeat_penalty": repeat_penalty, "seed": seed}}
         result = await self._post("/api/chat", payload, timeout, stream=stream)

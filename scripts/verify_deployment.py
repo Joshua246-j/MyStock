@@ -91,7 +91,7 @@ def run_verification(base_url: str, timeout: float = 30.0, require_ollama: bool 
         # 6. Chatbot & Ollama LLM Request
         try:
             payload = {"message": "Say hello in one short word."}
-            r = client.post("/api/chat", json=payload, timeout=45.0)
+            r = client.post("/api/chat", json=payload, timeout=max(timeout, 60.0))
             if r.status_code == 200:
                 res = r.json()
                 answer = res.get("answer", "").strip()

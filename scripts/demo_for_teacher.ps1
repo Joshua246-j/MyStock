@@ -64,14 +64,53 @@ function Run-Pytest {
     }
 }
 
+$script:tempServer = $null
+
+function Test-ServerListening([string]$url = "http://localhost:8000") {
+    try {
+        $uri = [System.Uri]$url
+        $client = New-Object System.Net.Sockets.TcpClient
+        $iar = $client.BeginConnect($uri.Host, $uri.Port, $null, $null)
+        $wait = $iar.AsyncWaitHandle.WaitOne(600)
+        if (-not $wait) {
+            $client.Close()
+            return $false
+        }
+        $client.EndConnect($iar)
+        $client.Close()
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Ensure-ServerRunning([string]$targetUrl = "http://localhost:8000") {
+    if (-not (Test-ServerListening $targetUrl)) {
+        Write-Host "  [INFO] Target server at $targetUrl is not running." -ForegroundColor Yellow
+        Write-Host "  Starting local FastAPI server in background for testing..." -ForegroundColor Cyan
+        $script:tempServer = Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList "-m uvicorn app.main:app --host 127.0.0.1 --port 8000" -PassThru -WindowStyle Hidden
+        $attempts = 0
+        while (-not (Test-ServerListening $targetUrl) -and $attempts -lt 20) {
+            Start-Sleep -Milliseconds 400
+            $attempts++
+        }
+        if (Test-ServerListening $targetUrl) {
+            Write-Host "  [OK] Local server active on $targetUrl" -ForegroundColor Green
+        }
+    }
+}
+
 function Run-DeploymentVerification {
     param([string]$targetUrl = "http://localhost:8000")
     Write-Host "`n>>> [3/5] Executing 7-Stage Live Deployment Verification against $targetUrl..." -ForegroundColor Cyan
+    Ensure-ServerRunning $targetUrl
     & .\.venv\Scripts\python.exe scripts/verify_deployment.py --url $targetUrl
 }
 
 function Run-EndpointVerification {
+    param([string]$targetUrl = "http://localhost:8000")
     Write-Host "`n>>> [4/5] Executing Complete 14-Route REST API Verification..." -ForegroundColor Cyan
+    Ensure-ServerRunning $targetUrl
     & .\.venv\Scripts\python.exe scripts/test_all_endpoints.py
 }
 
@@ -153,4 +192,9 @@ if ($args.Count -eq 0) {
     Run-Pytest
     Run-DeploymentVerification
     Run-EndpointVerification
+}
+
+# Clean up background temporary test server if launched by this script
+if ($script:tempServer -and -not $script:tempServer.HasExited) {
+    Stop-Process -Id $script:tempServer.Id -Force -ErrorAction SilentlyContinue
 }
