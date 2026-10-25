@@ -109,9 +109,9 @@ Invoke-RestMethod http://127.0.0.1:8000/api/health/ready
 
 ### Step 5: Test Real-Time Market Data
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8000/api/market/quotes?symbols=AAPL,MSFT,NVDA
+Invoke-RestMethod http://127.0.0.1:8000/api/stocks/AAPL/quote
 ```
-*Expected Output:* Real market prices, volume, and percentage changes for Apple, Microsoft, and Nvidia.
+*Expected Output:* Real market prices, volume, previous close, and percentage changes for Apple from Yahoo Finance.
 
 ### Step 6: Clean Shutdown
 ```powershell
@@ -231,11 +231,11 @@ Invoke-RestMethod "<RENDER_URL>/api/health/live"
 # 2. Market Readiness Probe
 Invoke-RestMethod "<RENDER_URL>/api/health/ready"
 
-# 3. Live Quotes for Teacher
-Invoke-RestMethod "<RENDER_URL>/api/market/quotes?symbols=AAPL,GOOGL,TSLA"
+# 3. Live Stock Quote (Yahoo Finance)
+Invoke-RestMethod "<RENDER_URL>/api/stocks/AAPL/quote"
 
-# 4. Candlestick Historical Chart Data
-Invoke-RestMethod "<RENDER_URL>/api/market/candles?symbol=AAPL&timeframe=1d&limit=30"
+# 4. Candlestick Historical Chart Data (30-day daily bars)
+Invoke-RestMethod "<RENDER_URL>/api/stocks/AAPL/history?period=1mo&interval=1d"
 
 # 5. Automated Verification Script
 python scripts/verify_deployment.py --url "<RENDER_URL>" --market-only

@@ -30,26 +30,24 @@ spec:
         fsGroup: 10001
       initContainers:
         - name: ensure-ollama-models
-          image: ollama/ollama:latest
+          image: joshuajomon246/stockterminal:latest
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "-c"]
           args:
             - >-
-              echo "Checking Ollama connectivity...";
+              echo "Testing Ollama service connectivity...";
               READY=0;
               for i in 1 2 3 4 5 6 7 8 9 10; do
-                if ollama list >/dev/null 2>&1; then
+                if curl -s http://ollama.stockrag.svc.cluster.local:11434/api/tags >/dev/null 2>&1; then
                   READY=1;
-                  echo "Ollama is ready. Attempting to pull models...";
-                  ollama pull "$OLLAMA_MODEL" || echo "Warning: Could not pull $OLLAMA_MODEL";
-                  ollama pull "$EMBEDDING_MODEL" || echo "Warning: Could not pull $EMBEDDING_MODEL";
+                  echo "Ollama service is reachable on cluster network.";
                   break;
                 fi;
                 echo "Waiting for Ollama service ($i/10)...";
-                sleep 3;
+                sleep 2;
               done;
               if [ "$READY" -eq 0 ]; then
-                echo "Ollama not reachable within 30s. Proceeding so Stock Terminal API and Market UI can start.";
+                echo "Ollama starting in background. Proceeding so Stock Terminal API and Market UI can start.";
               fi;
               exit 0
           envFrom:
