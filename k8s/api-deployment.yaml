@@ -35,8 +35,23 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - >-
-              until ollama list >/dev/null 2>&1; do sleep 2; done;
-              ollama pull "$OLLAMA_MODEL" && ollama pull "$EMBEDDING_MODEL"
+              echo "Checking Ollama connectivity...";
+              READY=0;
+              for i in 1 2 3 4 5 6 7 8 9 10; do
+                if ollama list >/dev/null 2>&1; then
+                  READY=1;
+                  echo "Ollama is ready. Attempting to pull models...";
+                  ollama pull "$OLLAMA_MODEL" || echo "Warning: Could not pull $OLLAMA_MODEL";
+                  ollama pull "$EMBEDDING_MODEL" || echo "Warning: Could not pull $EMBEDDING_MODEL";
+                  break;
+                fi;
+                echo "Waiting for Ollama service ($i/10)...";
+                sleep 3;
+              done;
+              if [ "$READY" -eq 0 ]; then
+                echo "Ollama not reachable within 30s. Proceeding so Stock Terminal API and Market UI can start.";
+              fi;
+              exit 0
           envFrom:
             - configMapRef:
                 name: stockrag-config

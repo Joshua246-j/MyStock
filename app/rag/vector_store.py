@@ -8,9 +8,14 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
-import faiss
+try:
+    import faiss
+    from langchain_core.documents import Document
+except ImportError:
+    faiss = None
+    Document = None
+
 import numpy as np
-from langchain_core.documents import Document
 from sqlalchemy import text
 
 from app.config import EMBEDDING_MODEL, FAISS_PATH
@@ -264,6 +269,8 @@ class FaissVectorStore:
             return results
 
     def health_check(self) -> bool:
+        if faiss is None:
+            return False
         try:
             with _LOCK:
                 _ensure_current_locked()

@@ -14,9 +14,9 @@ import json
 import time
 import httpx
 
-def run_verification(base_url: str, timeout: float = 30.0, require_ollama: bool = True) -> bool:
+def run_verification(base_url: str, timeout: float = 30.0, require_ollama: bool = True, market_only: bool = False) -> bool:
     print(f"\n=======================================================")
-    print(f"VERIFYING DEPLOYMENT AT: {base_url}")
+    print(f"VERIFYING DEPLOYMENT AT: {base_url} (Mode: {'Market-Only Cloud' if market_only else 'Full Application'})")
     print(f"=======================================================\n")
     
     overall_success = True
@@ -24,23 +24,22 @@ def run_verification(base_url: str, timeout: float = 30.0, require_ollama: bool 
     documents = []
     
     with httpx.Client(base_url=base_url, timeout=timeout) as client:
-        # Startup may include a first model load. Do not probe the UI while the
-        # API is still warming and then report expected startup connection drops.
+        # Startup readiness probe
         ready = False
-        deadline = time.monotonic() + 660
+        deadline = time.monotonic() + (30 if market_only else 660)
         while time.monotonic() < deadline:
             try:
-                readiness = client.get("/api/health/ready", timeout=max(timeout, 300.0))
+                readiness = client.get("/api/health/ready", timeout=min(timeout, 10.0 if market_only else 300.0))
                 if readiness.status_code == 200 and readiness.json().get("ready") is True:
                     ready = True
                     break
             except httpx.HTTPError:
                 pass
-            time.sleep(2)
+            time.sleep(1 if market_only else 2)
         if ready:
-            print("[PASS] Startup readiness (configured chat generation, embedding model, retrieval, and database are ready)")
+            print("[PASS] Startup readiness (Application, database, and core services are ready)")
         else:
-            print("[FAIL] Startup readiness did not pass within 660 seconds; dependent checks may fail")
+            print("[FAIL] Startup readiness did not pass within timeout; dependent checks may fail")
             overall_success = False
 
         # 1. Root and Frontend Shell
@@ -77,8 +76,17 @@ def run_verification(base_url: str, timeout: float = 30.0, require_ollama: bool 
                 ollama_status = health_data.get("ollama")
                 market_status = health_data.get("market_data", {}).get("status")
                 vector_status = health_data.get("vector_database")
-                if health_data.get("ready") is True and health_data.get("chat_model_warmed") is True:
-                    print(f"[PASS] 3. Health Endpoint (App: {app_status}, Ollama: {ollama_status}, Market probe: {market_status}, Vector: {vector_status})")
+                mode = health_data.get("mode", "full")
+                is_ready = health_data.get("ready") is True
+                model_verified = (
+                    health_data.get("chat_model_generation_verified") is True
+                    or health_data.get("chat_model_warmed") is True
+                    or mode == "market-only"
+                    or not require_ollama
+                    or market_only
+                )
+                if is_ready and model_verified:
+                    print(f"[PASS] 3. Health Endpoint (App: {app_status}, Mode: {mode}, Market: {market_status}, Vector: {vector_status})")
                 else:
                     print(f"[FAIL] 3. Health endpoint responded but dependencies are not ready (App: {app_status}, Ollama: {ollama_status})")
                     overall_success = False
@@ -89,6 +97,88 @@ def run_verification(base_url: str, timeout: float = 30.0, require_ollama: bool 
             print(f"[FAIL] 3. Health check failed: {e}")
             overall_success = False
 
+        if market_only:
+            # 4. Popular Symbols Search
+            try:
+                r = client.get("/api/symbols/popular", headers={"Origin": "https://render.com"})
+                if r.status_code == 200 and r.json().get("symbols"):
+                    syms = [s["symbol"] for s in r.json()["symbols"][:4]]
+                    cors_hdr = r.headers.get("access-control-allow-origin", "none")
+                    print(f"[PASS] 4. Popular Symbols API ({len(r.json()['symbols'])} symbols: {syms}, CORS: {cors_hdr})")
+                else:
+                    print(f"[FAIL] 4. Symbols endpoint returned {r.status_code}")
+                    overall_success = False
+            except Exception as e:
+                print(f"[FAIL] 4. Symbols check failed: {e}")
+                overall_success = False
+
+            # 5. Live Market Quote
+            try:
+                r = client.get("/api/stocks/AAPL/quote")
+                if r.status_code == 200 and r.json().get("success"):
+                    quote = r.json()
+                    print(f"[PASS] 5. Market Quote AAPL (Price: ${quote.get('price')}, Status: {quote.get('data_status')}, Source: {quote.get('source')})")
+                else:
+                    print(f"[WARN] 5. Market Quote returned status {r.status_code}")
+            except Exception as e:
+                print(f"[WARN] 5. Market Quote error: {e}")
+
+            # 6. Historical Candlestick Chart Data
+            try:
+                r = client.get("/api/stocks/AAPL/history", params={"period": "1mo", "interval": "1d"})
+                if r.status_code == 200 and r.json().get("success") and r.json().get("data"):
+                    bars = r.json()["data"]
+                    print(f"[PASS] 6. Historical Candlesticks ({len(bars)} daily bars, latest close: {bars[-1].get('Close') or bars[-1].get('close')})")
+                else:
+                    print(f"[FAIL] 6. History endpoint returned {r.status_code}")
+                    overall_success = False
+            except Exception as e:
+                print(f"[FAIL] 6. History check failed: {e}")
+                overall_success = False
+
+            # 7. Technical Indicators
+            try:
+                r = client.get("/api/stocks/AAPL/technical", params={"period": "6mo", "interval": "1d"})
+                if r.status_code == 200 and r.json().get("success"):
+                    tech = r.json()
+                    rsi = tech.get("indicators", {}).get("rsi") or tech.get("rsi")
+                    print(f"[PASS] 7. Technical Analytics (RSI: {rsi}, Status: {tech.get('status', 'OK')})")
+                else:
+                    print(f"[WARN] 7. Technical analytics returned status {r.status_code}")
+            except Exception as e:
+                print(f"[WARN] 7. Technical analytics error: {e}")
+
+            # 8. Financial News Feed
+            try:
+                r = client.get("/api/news", params={"symbols": "AAPL", "market": "us", "limit": 5, "days": 7})
+                if r.status_code == 200 and r.json().get("success"):
+                    print(f"[PASS] 8. Financial News Feed ({len(r.json().get('news', []))} items)")
+                else:
+                    print(f"[WARN] 8. News feed returned status {r.status_code}")
+            except Exception as e:
+                print(f"[WARN] 8. News feed error: {e}")
+
+            # 9. Cloud Preview Fallback Endpoints
+            try:
+                r = client.post("/api/chat", json={"message": "hello"})
+                if r.status_code == 200 and "Market Cloud Preview" in r.json().get("response", ""):
+                    print(f"[PASS] 9. AI Chat Educational Cloud Fallback verified")
+                else:
+                    print(f"[FAIL] 9. Chat fallback returned status {r.status_code}")
+                    overall_success = False
+            except Exception as e:
+                print(f"[FAIL] 9. Chat fallback error: {e}")
+                overall_success = False
+
+            print(f"\n-------------------------------------------------------")
+            if overall_success:
+                print("RESULT: CLOUD MARKET-ONLY VERIFICATION PASSED")
+            else:
+                print("RESULT: CLOUD MARKET-ONLY VERIFICATION FAILED")
+            print(f"-------------------------------------------------------\n")
+            return overall_success
+
+        # Full Local Application Checks (Stages 4-10)
         # 4. Models Catalog
         try:
             r = client.get("/api/models")
@@ -115,7 +205,7 @@ def run_verification(base_url: str, timeout: float = 30.0, require_ollama: bool 
         except Exception as e:
             print(f"[WARN] 5. Market data check encountered error: {e}")
 
-        # 6. News API: distinguish provider/cache status from a fresh search.
+        # 6. News API
         try:
             r = client.get("/api/news", params={"symbols": "AAPL", "market": "us", "limit": 5, "days": 7}, timeout=max(timeout, 50.0))
             news_data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
@@ -167,7 +257,7 @@ def run_verification(base_url: str, timeout: float = 30.0, require_ollama: bool 
             print(f"[FAIL] 8. Database/Documents verification failed: {e}")
             overall_success = False
 
-        # 9. Exercise retrieval against one already-indexed research document.
+        # 9. Retrieval against research documents
         research_doc = next((doc for doc in documents if doc.get("status") == "completed" and doc.get("type") in {"pdf", "docx", "txt", "html"}), None)
         if research_doc is None:
             research_doc = next((doc for doc in documents if doc.get("status") == "completed" and doc.get("type") == "web"), None)
@@ -203,7 +293,7 @@ def run_verification(base_url: str, timeout: float = 30.0, require_ollama: bool 
         else:
             print("[WARN] 9. Document RAG check skipped: no completed research document is indexed")
 
-        # 10. Conversation persistence: confirm generated chat history can be read back.
+        # 10. Conversation persistence
         try:
             if session_id:
                 r = client.get(f"/api/chat/sessions/{session_id}")
@@ -232,8 +322,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Verify MyStock deployment health and functionality.")
     parser.add_argument("--url", default="http://127.0.0.1:8000", help="Base URL of target deployment")
     parser.add_argument("--timeout", type=float, default=30.0, help="HTTP timeout in seconds")
-    parser.add_argument("--require-ollama", action="store_true", default=True, help="Require working Ollama generation (required for a passing verification)")
+    parser.add_argument("--require-ollama", action="store_true", default=True, help="Require working Ollama generation (required for full deployment)")
+    parser.add_argument("--market-only", action="store_true", default=False, help="Run lean verification for market-only cloud deployment (Render)")
     args = parser.parse_args()
     
-    success = run_verification(args.url, args.timeout, args.require_ollama)
+    success = run_verification(args.url, args.timeout, args.require_ollama, args.market_only)
     sys.exit(0 if success else 1)

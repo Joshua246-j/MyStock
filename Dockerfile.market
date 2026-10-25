@@ -1,0 +1,49 @@
+# syntax=docker/dockerfile:1
+# Lean, market-only Docker image optimized for resource-constrained cloud environments (e.g. Render Free Tier)
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    HOST=0.0.0.0 \
+    PORT=8000 \
+    MARKET_ONLY=true
+
+# Minimal OS dependencies: curl for health probes, sqlite3 for local cache
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Non-root user with UID 10001 for least-privilege security
+RUN groupadd -r appgroup --gid 10001 && \
+    useradd -r -g appgroup --uid 10001 --create-home --home-dir /home/appuser appuser
+
+WORKDIR /app
+
+# Install lean cloud dependencies (no heavy FAISS/LLM packages)
+COPY requirements-cloud.txt ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-cloud.txt
+
+# Application modules, database migrations, static assets, and entrypoint
+COPY alembic.ini ./
+COPY alembic ./alembic
+COPY app ./app
+COPY static ./static
+COPY run.py ./
+COPY entrypoint.sh ./
+
+RUN mkdir -p /app/data /home/appuser/.cache/py-yfinance && \
+    chmod +x /app/entrypoint.sh && \
+    chown -R appuser:appgroup /app /home/appuser/.cache
+
+USER appuser
+
+EXPOSE 8000
+
+# Fast, non-Ollama health check probe
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8000/api/health/live || exit 1
+
+ENTRYPOINT ["/app/entrypoint.sh"]

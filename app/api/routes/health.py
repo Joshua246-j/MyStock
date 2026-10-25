@@ -5,8 +5,18 @@ from sqlalchemy import text
 from app.db.models import UserSettings
 from app.db.database import SessionLocal, engine
 from app.ollama_client import OllamaClient
-from app.rag.vector_store import get_vector_store
-from app.rag.lexical_store import lexical_index_available
+import os
+
+try:
+    from app.rag.vector_store import get_vector_store
+except ImportError:
+    get_vector_store = None
+
+try:
+    from app.rag.lexical_store import lexical_index_available
+except ImportError:
+    lexical_index_available = None
+
 from app.dependencies import market_service
 from app.config import EMBEDDING_MODEL
 
@@ -17,6 +27,8 @@ router = APIRouter()
 _warmed_chat_model: str | None = None
 _chat_model_warming = False
 _readiness_warmup_lock = asyncio.Lock()
+
+MARKET_ONLY = os.getenv("MARKET_ONLY", "").lower() in ("1", "true", "yes") or os.getenv("APP_MODE", "").lower() == "market-only"
 
 
 def set_warmed_chat_model(model: str | None) -> None:
@@ -35,6 +47,8 @@ def _health_settings():
         return row.settings if row and row.settings else {}
 
 def _check_faiss():
+    if MARKET_ONLY or get_vector_store is None:
+        return True
     try:
         if not get_vector_store().health_check():
             return False
@@ -46,8 +60,72 @@ def _check_faiss():
 @router.get("/health")
 async def health_check(include_external: bool = True):
     settings = await asyncio.to_thread(_health_settings)
-    model = settings.get("ai_model", ollama_client.model)
     timeout = max(1, int(settings.get("request_timeout", 30)))
+
+    if MARKET_ONLY:
+        def _check_web():
+            import socket
+            try:
+                socket.gethostbyname("news.google.com")
+                return True
+            except Exception:
+                return False
+
+        database_ok = False
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            database_ok = True
+        except Exception:
+            logger.exception("database_health_check_failed")
+
+        market_result = {}
+        market_ok = True
+        provider = "Yahoo Finance / Stooq"
+        if include_external:
+            try:
+                market_result = await asyncio.wait_for(asyncio.to_thread(market_service.check_provider, "AAPL"), timeout=min(timeout, 4))
+                market_ok = bool(isinstance(market_result, dict) and market_result.get("success"))
+                if market_ok:
+                    provider = market_result.get("source", provider)
+            except Exception:
+                market_ok = False
+
+        web_ok = await asyncio.to_thread(_check_web) if include_external else False
+        ready = bool(database_ok and (market_ok or not include_external))
+
+        return {
+            "application": "running" if ready else "degraded",
+            "status": "ready" if ready else "not_ready",
+            "ready": ready,
+            "mode": "market-only",
+            "cloud_preview": True,
+            "database": "available" if database_ok else "unavailable",
+            "ollama": "not_applicable",
+            "model": "cloud-market-preview",
+            "context_size": int(settings.get("context_size", 4096)),
+            "database_stats": {"documents": 0, "chunks": 0},
+            "model_available": True,
+            "embedding_model": "not_applicable",
+            "embedding_model_available": True,
+            "document_retrieval": "market_only",
+            "semantic_document_retrieval": "not_applicable",
+            "keyword_document_retrieval": "not_applicable",
+            "vector_database": "not_applicable",
+            "vector_backend": "none",
+            "web_search": {
+                "status": "available" if web_ok else "unavailable" if include_external else "not_checked",
+                "service": "Google News RSS & Allowed Publishers",
+            },
+            "market_data": {
+                "status": "available" if market_ok else "unavailable" if include_external else "not_checked",
+                "provider": provider,
+                "data_status": market_result.get("data_status", "PROVIDER_CLOSE") if market_ok else "UNAVAILABLE",
+                "error": None if market_ok else market_result.get("error", "No configured market-data provider is reachable."),
+            },
+        }
+
+    model = settings.get("ai_model", ollama_client.model)
     # One bounded catalog read gives consistent readiness for the selected chat
     # model and embeddings without a separate request for each model.
     try:
@@ -61,7 +139,8 @@ async def health_check(include_external: bool = True):
     embedding_ok = model_catalog.get("available") is True and any(name == EMBEDDING_MODEL or name.startswith(embedding_root + ":") for name in embedding_models)
     ollama_ok = model_catalog.get("available") is True
     faiss_call = asyncio.wait_for(asyncio.to_thread(_check_faiss), timeout=min(timeout, 3))
-    lexical_call = asyncio.wait_for(asyncio.to_thread(lexical_index_available), timeout=min(timeout, 3))
+    lexical_fn = lexical_index_available if lexical_index_available is not None else (lambda: False)
+    lexical_call = asyncio.wait_for(asyncio.to_thread(lexical_fn), timeout=min(timeout, 3))
     def _check_web():
         import socket
         try:
@@ -154,12 +233,18 @@ async def health_check(include_external: bool = True):
 @router.get("/health/live")
 async def liveness_check():
     """Cheap process check for restart policies; does not imply dependencies are ready."""
-    return {"application": "running", "status": "live"}
+    return {"application": "running", "status": "live", "mode": "market-only" if MARKET_ONLY else "full"}
 
 
 @router.get("/health/ready")
 async def readiness_check(response: Response):
-    """Report ready only when the configured chatbot model, embedding model, and DB respond."""
+    """Report ready only when core dependencies respond."""
+    if MARKET_ONLY:
+        details = await health_check(include_external=False)
+        if not details["ready"]:
+            response.status_code = 503
+        return details
+
     details = await health_check(include_external=False)
     if details.get("model_available") and not details.get("chat_model_generation_verified"):
         # Serialize fallback warmups so simultaneous health probes cannot

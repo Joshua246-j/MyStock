@@ -1,0 +1,19 @@
+# Lean dependency manifest for free-tier cloud deployment (e.g. Render)
+# Excludes heavy local ML/LLM runtimes (faiss-cpu, langchain-ollama, scikit-learn, pymupdf)
+# while preserving complete real-time market data, charts, news, and technical analytics.
+
+fastapi>=0.111,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.7,<3
+pydantic-settings>=2.2,<3
+httpx>=0.27,<1
+python-multipart>=0.0.9
+pandas>=2.1,<4
+numpy>=1.26,<3
+yfinance>=0.2.40
+SQLAlchemy>=2.0,<3
+alembic>=1.13,<2
+python-dotenv>=1.0
+tenacity>=8.2
+beautifulsoup4>=4.12
+psutil>=5.9.0

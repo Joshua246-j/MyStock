@@ -12,7 +12,6 @@ from time import monotonic, sleep
 from urllib.robotparser import RobotFileParser
 from hashlib import sha256
 from typing import Any
-from app.rag.ingest import chunk_and_store
 
 ALLOWED_DOMAINS = {
     "yahoo.com", "finance.yahoo.com", "reuters.com", "bloomberg.com", 
