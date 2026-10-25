@@ -13,6 +13,11 @@ from urllib.robotparser import RobotFileParser
 from hashlib import sha256
 from typing import Any
 
+try:
+    from app.rag.ingest import chunk_and_store
+except ImportError:
+    chunk_and_store = None
+
 ALLOWED_DOMAINS = {
     "yahoo.com", "finance.yahoo.com", "reuters.com", "bloomberg.com", 
     "wsj.com", "cnbc.com", "ft.com", "investopedia.com", "sec.gov",

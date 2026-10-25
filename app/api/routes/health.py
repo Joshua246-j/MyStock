@@ -92,7 +92,7 @@ async def health_check(include_external: bool = True):
                 market_ok = False
 
         web_ok = await asyncio.to_thread(_check_web) if include_external else False
-        ready = bool(database_ok and (market_ok or not include_external))
+        ready = bool(database_ok)
 
         return {
             "application": "running" if ready else "degraded",
